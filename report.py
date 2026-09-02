@@ -53,7 +53,7 @@ def find_chromium():
                 for f in files:
                     if f in ("chrome", "headless_shell", "chromium"):
                         return os.path.join(dirpath, f)
-    raise SystemExit("No Chromium found for PDF rendering (install chromium).")
+    raise RuntimeError("No Chromium found for PDF rendering (install chromium).")
 
 
 def html_to_pdf(html_path, pdf_path):

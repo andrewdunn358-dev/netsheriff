@@ -95,13 +95,13 @@ def build_pdf(conn, t, start, end, hide_brand=False):
     Chromium isn't available or conversion fails, in which case pdf_path
     is None."""
     import tempfile
-    html = reportmod.render_html(conn, t, start, sql_end_exclusive(end), BRAND, hide_brand=hide_brand)
-    tmpdir = tempfile.mkdtemp()
-    html_path = os.path.join(tmpdir, "report.html")
-    pdf_path = os.path.join(tmpdir, "report.pdf")
-    with open(html_path, "w") as f:
-        f.write(html)
     try:
+        html = reportmod.render_html(conn, t, start, sql_end_exclusive(end), BRAND, hide_brand=hide_brand)
+        tmpdir = tempfile.mkdtemp()
+        html_path = os.path.join(tmpdir, "report.html")
+        pdf_path = os.path.join(tmpdir, "report.pdf")
+        with open(html_path, "w") as f:
+            f.write(html)
         reportmod.html_to_pdf(html_path, pdf_path)
     except Exception as e:
         return None, str(e)
