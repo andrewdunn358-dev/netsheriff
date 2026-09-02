@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Site blocked — Net Sheriff</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="assets/favicon-16.png">
+<link rel="shortcut icon" href="assets/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:#0d0805; --orange:#ee4b00; --orange-dark:#c33e00;
+    --cream:#faf6f2; --steel:#5b564f; --steel-2:#8a8478; --line:#e8e1d8;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;
+    background:#0d0805 url('assets/hero-crop.jpg') center 35% / cover no-repeat;
+    color:var(--ink);
+  }
+  body::before {
+    content:''; position:fixed; inset:0;
+    background:linear-gradient(180deg, rgba(9,5,3,0.72), rgba(9,5,3,0.85));
+  }
+  .card {
+    position:relative; z-index:1; width:100%; max-width:520px; margin:20px;
+    background:#fff; border-radius:16px; padding:44px 40px;
+    box-shadow:0 24px 60px rgba(0,0,0,0.45);
+    text-align:center;
+  }
+  .badge-ic { width:56px; height:56px; margin:0 auto 22px; border-radius:14px;
+    background:rgba(238,75,0,0.1); display:flex; align-items:center; justify-content:center; }
+  .badge-ic svg { width:28px; height:28px; color:var(--orange-dark); }
+  h1 { font-family:"Archivo",sans-serif; font-weight:800; font-size:25px; margin:0 0 12px; }
+  p.sub { color:var(--steel); font-size:15.5px; line-height:1.6; margin:0 0 8px; }
+  .domain-pill {
+    display:inline-block; margin:18px 0 6px; padding:8px 16px; border-radius:8px;
+    background:var(--cream); border:1px solid var(--line); font-family:ui-monospace,monospace;
+    font-size:14px; color:var(--ink); word-break:break-all;
+  }
+  .reason { color:var(--steel-2); font-size:13.5px; margin:6px 0 0; }
+  .divider { height:1px; background:var(--line); margin:26px 0; }
+  .foot-note { font-size:13.5px; color:var(--steel); line-height:1.6; }
+  .foot-note a { color:var(--orange-dark); font-weight:600; text-decoration:none; }
+  .foot-note a:hover { text-decoration:underline; }
+  .wordmark { margin-top:26px; display:flex; align-items:center; justify-content:center; gap:8px; }
+  .wordmark img { height:18px; }
+  .wordmark span { font-family:"Archivo",sans-serif; font-weight:800; font-size:13px; color:var(--steel); }
+  .wordmark span b { color:var(--orange-dark); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge-ic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+    </div>
+    <h1>This site is blocked</h1>
+    <p class="sub">Access to this address isn't allowed under your organisation's network policy.</p>
+    <div id="domainBlock" style="display:none">
+      <div class="domain-pill" id="domainText"></div>
+      <p class="reason" id="reasonText"></p>
+    </div>
+    <div class="divider"></div>
+    <p class="foot-note">If you think this is a mistake, contact your IT administrator —
+      they can review or adjust the filtering policy for your organisation.</p>
+    <div class="wordmark">
+      <img src="assets/badge.png" alt="">
+      <span>NET <b>SHERIFF</b></span>
+    </div>
+  </div>
+
+  <script>
+    // If the filter's redirect passes ?domain=...&reason=..., show them —
+    // otherwise this still reads fine as a generic message.
+    const params = new URLSearchParams(window.location.search);
+    const domain = params.get('domain');
+    const reason = params.get('reason');
+    if (domain) {
+      document.getElementById('domainBlock').style.display = 'block';
+      document.getElementById('domainText').textContent = domain;
+      if (reason) document.getElementById('reasonText').textContent = reason;
+    }
+  </script>
+</body>
+</html>
