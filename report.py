@@ -23,11 +23,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 def _static_url_stub(endpoint, **kwargs):
     """report.py renders dashboard.html outside Flask's request context (for
     PDF export / emailed reports), so the real url_for() isn't available.
-    The only url_for calls in dashboard.html are for static assets (favicon,
-    logo) which are either hidden in print output or non-critical if they
-    don't resolve — this just needs to not crash the render."""
+    Chromium loads the rendered HTML via a local file:// URL, so a path
+    starting with '/' would resolve against the filesystem root, not the
+    static folder — return a real file:// path to the actual asset instead."""
     if endpoint == "static":
-        return "/static/" + kwargs.get("filename", "")
+        return "file://" + os.path.join(HERE, "static", kwargs.get("filename", ""))
     return "#"
 
 
