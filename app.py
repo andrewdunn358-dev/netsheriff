@@ -206,6 +206,64 @@ def admin_reset_tenant(name):
                            reset_name=name, reset_password=new_password)
 
 
+@app.route("/admin/admins")
+@admin_required
+def admin_admins():
+    conn = get_conn()
+    admins = dbmod.list_admins(conn)
+    return render_template("admin_admins.html", brand=BRAND, admins=admins)
+
+
+@app.route("/admin/admins/new", methods=["GET", "POST"])
+@admin_required
+def admin_new_admin():
+    error = None
+    if request.method == "POST":
+        conn = get_conn()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        email = request.form.get("email", "").strip() or None
+        if not (username and len(password) >= 8):
+            error = "Username is required and password must be at least 8 characters."
+        else:
+            dbmod.create_admin(conn, username, password, email)
+            return redirect(url_for("admin_admins"))
+    return render_template("admin_new_admin.html", brand=BRAND, error=error)
+
+
+@app.route("/admin/admins/<username>/reset", methods=["POST"])
+@admin_required
+def admin_reset_admin(username):
+    import secrets
+    conn = get_conn()
+    new_password = secrets.token_urlsafe(9)
+    dbmod.set_admin_password(conn, username, new_password)
+    admins = dbmod.list_admins(conn)
+    return render_template("admin_admins.html", brand=BRAND, admins=admins,
+                           reset_username=username, reset_password=new_password)
+
+
+@app.route("/admin/change-password", methods=["GET", "POST"])
+@admin_required
+def admin_change_password():
+    error = success = None
+    if request.method == "POST":
+        conn = get_conn()
+        current = request.form.get("current_password", "")
+        new1 = request.form.get("new_password", "")
+        new2 = request.form.get("new_password2", "")
+        if not dbmod.verify_admin(conn, session["admin"], current):
+            error = "Current password is incorrect."
+        elif len(new1) < 8:
+            error = "New password must be at least 8 characters."
+        elif new1 != new2:
+            error = "New passwords don't match."
+        else:
+            dbmod.set_admin_password(conn, session["admin"], new1)
+            success = "Password updated."
+    return render_template("admin_change_password.html", brand=BRAND, error=error, success=success)
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():

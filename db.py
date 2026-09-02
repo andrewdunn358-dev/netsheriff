@@ -79,10 +79,15 @@ def list_tenants(conn):
 
 
 def create_admin(conn, username, password, email=None):
-    """Register a staff admin login — entirely separate table from client tenants."""
+    """Register (or update) a staff admin login — entirely separate table
+    from client tenants. Safe to call again for an existing username."""
     from werkzeug.security import generate_password_hash
-    conn.execute("INSERT INTO admin_users (username, password_hash, email) VALUES (?,?,?)",
-                 (username, generate_password_hash(password), email))
+    conn.execute("""
+        INSERT INTO admin_users (username, password_hash, email) VALUES (?,?,?)
+        ON CONFLICT(username) DO UPDATE SET
+            password_hash=excluded.password_hash,
+            email=excluded.email
+        """, (username, generate_password_hash(password), email))
     conn.commit()
 
 
@@ -92,6 +97,17 @@ def verify_admin(conn, username, password):
     if row and check_password_hash(row["password_hash"], password):
         return row
     return None
+
+
+def list_admins(conn):
+    return conn.execute("SELECT username, email FROM admin_users ORDER BY username").fetchall()
+
+
+def set_admin_password(conn, username, new_password):
+    from werkzeug.security import generate_password_hash
+    conn.execute("UPDATE admin_users SET password_hash=? WHERE username=?",
+                 (generate_password_hash(new_password), username))
+    conn.commit()
 
 
 def set_tenant_password(conn, name, new_password):
