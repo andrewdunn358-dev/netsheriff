@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ display_name }} — Internet Usage Report</title>
+<style>
+  :root { color-scheme: light dark; }
+  .viz-root {
+    color-scheme: light;
+    --surface-1:#fcfcfb; --page:#f9f9f7;
+    --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,0.10);
+    --s1:#2a78d6; --s2:#eb6834; --deemph:#c9c8c1;
+    --seq-100:#cde2fb; --seq-200:#9ec5f4; --seq-300:#6da7ec; --seq-400:#3987e5;
+    --seq-500:#256abf; --seq-600:#184f95; --seq-700:#0d366b;
+    --critical:#d03b3b; --good-text:#006300;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:#1a1a19; --page:#0d0d0d;
+      --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+      --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
+      --s1:#3987e5; --s2:#d95926; --deemph:#4a4a47;
+      --seq-100:#0d366b; --seq-200:#104281; --seq-300:#184f95; --seq-400:#256abf;
+      --seq-500:#3987e5; --seq-600:#6da7ec; --seq-700:#9ec5f4;
+      --critical:#d03b3b; --good-text:#0ca30c;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:#1a1a19; --page:#0d0d0d;
+    --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
+    --s1:#3987e5; --s2:#d95926; --deemph:#4a4a47;
+    --seq-100:#0d366b; --seq-200:#104281; --seq-300:#184f95; --seq-400:#256abf;
+    --seq-500:#3987e5; --seq-600:#6da7ec; --seq-700:#9ec5f4;
+    --critical:#d03b3b; --good-text:#0ca30c;
+  }
+  * { box-sizing: border-box; }
+  body.viz-root {
+    margin:0; background:var(--page); color:var(--ink-1);
+    font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+  }
+  .wrap { max-width:960px; margin:0 auto; padding:28px 20px 48px; }
+  header.rpt { display:flex; justify-content:space-between; align-items:flex-end;
+    gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  header.rpt h1 { font-size:22px; margin:0 0 2px; }
+  header.rpt .sub { color:var(--ink-2); font-size:13px; }
+  .brand { text-align:right; color:var(--ink-3); font-size:12px; }
+  .brand b { color:var(--ink-2); font-size:13px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+    gap:12px; margin-bottom:16px; }
+  .tile { background:var(--surface-1); border:1px solid var(--ring);
+    border-radius:10px; padding:14px 16px; }
+  .tile .lbl { color:var(--ink-2); font-size:12px; margin-bottom:4px; }
+  .tile .val { font-size:30px; font-weight:650; letter-spacing:-.01em; }
+  .tile .note { color:var(--ink-3); font-size:12px; margin-top:2px; }
+  .tile .flag { color:var(--critical); font-weight:600; font-size:12px; }
+  .card { background:var(--surface-1); border:1px solid var(--ring);
+    border-radius:10px; padding:16px 18px 12px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin:0 0 2px; }
+  .card .desc { color:var(--ink-2); font-size:12.5px; margin:0 0 12px; }
+  .legend { display:flex; gap:16px; font-size:12px; color:var(--ink-2);
+    margin:2px 0 8px; }
+  .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px;
+    margin-right:5px; vertical-align:-1px; }
+  svg text { font:11.5px system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .axis  { fill:var(--ink-3); }
+  .vlab  { fill:var(--ink-2); font-variant-numeric:tabular-nums; }
+  .dlab  { fill:var(--ink-2); font-weight:600; }
+  table.doms { width:100%; border-collapse:collapse; font-size:13px; }
+  table.doms th { text-align:left; color:var(--ink-3); font-weight:500;
+    font-size:12px; border-bottom:1px solid var(--grid); padding:6px 8px; }
+  table.doms td { padding:6px 8px; border-bottom:1px solid var(--grid); }
+  table.doms td.n { text-align:right; font-variant-numeric:tabular-nums; }
+  table.doms tr:last-child td { border-bottom:none; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:99px;
+    background:var(--page); border:1px solid var(--ring); color:var(--ink-2);
+    font-size:11.5px; }
+  #tip { position:fixed; pointer-events:none; background:var(--surface-1);
+    border:1px solid var(--ring); box-shadow:0 4px 14px rgba(0,0,0,.12);
+    border-radius:8px; padding:7px 10px; font-size:12.5px; color:var(--ink-1);
+    opacity:0; transition:opacity .08s; z-index:10; max-width:240px; }
+  #tip .t2 { color:var(--ink-2); }
+  .foot { color:var(--ink-3); font-size:11.5px; margin-top:20px; }
+  .toggle { background:none; border:1px solid var(--ring); color:var(--ink-2);
+    border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; }
+  @media print {
+    .toggle, .no-print { display:none; }
+    body.viz-root { background:#fff; }
+    .card, .tile { break-inside:avoid; border-color:#ddd; }
+  }
+</style>
+</head>
+<body class="viz-root">
+<div class="wrap">
+  <header class="rpt">
+    <div>
+      <h1>{{ display_name }}</h1>
+      <div class="sub">Internet usage report · <span id="period"></span></div>
+    </div>
+    <div class="brand">
+      <b>{{ brand }}</b><br>Managed web filtering &amp; reporting
+      <div style="margin-top:6px"><button class="toggle" id="themeBtn">Dark / light</button></div>
+    </div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h2>Where the office's browsing went</h2>
+    <p class="desc">DNS requests by category across all staff (ads &amp; background trackers excluded).</p>
+    <div id="catChart"></div>
+  </div>
+
+  <div class="card">
+    <h2>Social media &amp; leisure browsing, by person</h2>
+    <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar for the working-day average.</span></p>
+    <div id="userChart"></div>
+  </div>
+
+  <div class="card">
+    <h2 id="heatTitle">Daily pattern</h2>
+    <p class="desc" id="heatDesc"></p>
+    <div id="heatChart"></div>
+  </div>
+
+  <div class="card">
+    <h2>Day-by-day trend</h2>
+    <p class="desc">All browsing vs. social &amp; leisure browsing, whole office.</p>
+    <div class="legend" id="trendLegend"></div>
+    <div id="trendChart"></div>
+  </div>
+
+  <div class="card">
+    <h2>Most visited sites</h2>
+    <p class="desc">Top destinations across the office for the period.</p>
+    <table class="doms" id="domTable">
+      <thead><tr><th>Site</th><th>Category</th><th style="text-align:right">Requests</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <p class="foot">Figures are DNS requests observed by the filtering service — a
+  measure of browsing activity and its pattern over time, not literal minutes on
+  screen. Devices on mobile data are not visible to the filter. Report generated
+  automatically; queries to ad networks and background trackers are excluded from
+  category and site figures.</p>
+</div>
+<div id="tip"></div>
+
+<script>window.DATA = {{ data | tojson }};</script>
+<script>
+(function () {
+  const D = window.DATA, css = getComputedStyle(document.body);
+  const C = n => css.getPropertyValue(n).trim();
+  const fmt = n => n.toLocaleString('en-GB');
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (t, a) => { const e = document.createElementNS(NS, t);
+    for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dlab = (s, withMonth) => { const d = new Date(s + 'T00:00:00');
+    return days[(d.getDay()+6)%7] + ' ' + d.getDate() +
+      (withMonth ? ' ' + months[d.getMonth()] : ''); };
+
+  const p0 = D.daily.length ? D.daily[0].date : D.start;
+  const p1 = D.daily.length ? D.daily[D.daily.length-1].date : D.end;
+  document.getElementById('period').textContent =
+    dlab(p0, true) + ' – ' + dlab(p1, true) + ' ' + new Date(p1).getFullYear();
+  document.getElementById('themeBtn').onclick = () => {
+    const r = document.documentElement;
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const cur = r.dataset.theme || (dark ? 'dark' : 'light');
+    r.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+    render();
+  };
+
+  // tooltip
+  const tip = document.getElementById('tip');
+  const showTip = (ev, html) => { tip.innerHTML = html; tip.style.opacity = 1;
+    const x = Math.min(ev.clientX + 14, innerWidth - 260);
+    tip.style.left = x + 'px'; tip.style.top = (ev.clientY + 14) + 'px'; };
+  const hideTip = () => tip.style.opacity = 0;
+
+  function kpis() {
+    const k = D.kpis, host = document.getElementById('kpis');
+    host.innerHTML = '';
+    const items = [
+      ['Web requests', fmt(k.total), 'across ' + k.users + ' staff'],
+      ['Social & leisure share', k.distraction_pct + '%', 'of all browsing'],
+      ['Blocked attempts', fmt(k.blocked), 'harmful or off-policy sites'],
+      ['Needs a look', D.flagged_user ? cap(D.flagged_user) : '—',
+        'highest social-media use', true]];
+    for (const [l, v, n, flag] of items) {
+      const d = document.createElement('div'); d.className = 'tile';
+      d.innerHTML = '<div class="lbl">' + l + '</div><div class="val">' + v +
+        '</div><div class="' + (flag ? 'flag' : 'note') + '">' + n + '</div>';
+      host.appendChild(d);
+    }
+  }
+  const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // ---- horizontal bar helper (thin marks, 4px rounded data-end, 2px gaps) ---
+  function hbars(host, rows, opts) {
+    host.innerHTML = '';
+    const W = Math.min(host.clientWidth || 860, 900), lab = opts.labelW,
+          bh = 16, gap = 14, H = rows.length * (bh + gap) + 8;
+    const max = Math.max(...rows.map(r => r.v), 1), inner = W - lab - 78;
+    const svg = el('svg', { width: '100%', viewBox: `0 0 ${W} ${H}` });
+    rows.forEach((r, i) => {
+      const y = 4 + i * (bh + gap), w = Math.max(2, r.v / max * inner);
+      const t = el('text', { x: lab - 8, y: y + bh - 4, 'text-anchor': 'end' });
+      t.textContent = r.label; t.setAttribute('class', r.em ? 'dlab' : 'axis');
+      svg.appendChild(t);
+      const bar = el('path', { d: roundedRight(lab, y, w, bh, 4), fill: r.color });
+      bar.style.cursor = 'default';
+      bar.addEventListener('mousemove', ev => showTip(ev, r.tip));
+      bar.addEventListener('mouseleave', hideTip);
+      svg.appendChild(bar);
+      const v = el('text', { x: lab + w + 8, y: y + bh - 4 });
+      v.setAttribute('class', 'vlab'); v.textContent = r.vtext || fmt(r.v);
+      svg.appendChild(v);
+    });
+    svg.appendChild(el('line', { x1: lab, y1: 0, x2: lab, y2: H,
+      stroke: C('--baseline'), 'stroke-width': 1 }));
+    host.appendChild(svg);
+  }
+  const roundedRight = (x, y, w, h, r) =>
+    `M${x},${y} h${Math.max(0,w-r)} a${r},${r} 0 0 1 ${r},${r} v${h-2*r}` +
+    ` a${r},${r} 0 0 1 -${r},${r} h-${Math.max(0,w-r)} z`;
+
+  function catChart() {
+    const rows = D.category_share.map((c, i) => ({
+      label: c.category, v: c.requests,
+      color: [C('--seq-600'),C('--seq-500'),C('--seq-400'),C('--seq-300'),
+              C('--seq-200'),C('--seq-100'),C('--seq-100')][Math.min(i,6)],
+      tip: '<b>' + c.category + '</b><div class="t2">' + fmt(c.requests) +
+           ' requests</div>' }));
+    hbars(document.getElementById('catChart'), rows, { labelW: 150 });
+  }
+
+  function userChart() {
+    const rows = D.per_user.map(u => ({
+      label: cap(u.user), v: u.distraction, em: u.user === D.flagged_user,
+      color: u.user === D.flagged_user ? C('--s1') : C('--deemph'),
+      tip: '<b>' + cap(u.user) + '</b><div class="t2">' + fmt(u.distraction) +
+        ' social/leisure requests (~' +
+        fmt(Math.round(u.distraction / Math.max(D.daily.length, 1))) +
+        ' per working day)<br>' + fmt(u.total) + ' total requests (' +
+        Math.round(100 * u.distraction / Math.max(u.total,1)) + '% leisure)</div>'
+    }));
+    hbars(document.getElementById('userChart'), rows, { labelW: 110 });
+  }
+
+  function heatChart() {
+    const host = document.getElementById('heatChart'); host.innerHTML = '';
+    const dates = Object.keys(D.heatmap);
+    document.getElementById('heatTitle').textContent = D.flagged_user
+      ? cap(D.flagged_user) + "'s daily pattern — social & leisure sites"
+      : 'Daily pattern';
+    document.getElementById('heatDesc').textContent =
+      'Each cell is one hour of one day. Darker = more social/leisure requests in that hour. Office hours shown.';
+    if (!dates.length) return;
+    const h0 = 8, h1 = 18, hours = h1 - h0;
+    const W = Math.min(host.clientWidth || 860, 900), lab = 64;
+    const cw = Math.floor((W - lab - 10) / hours), ch = 26,
+          H = dates.length * (ch + 2) + 26;
+    const max = Math.max(...dates.map(d => Math.max(...D.heatmap[d].slice(h0, h1))), 1);
+    const ramp = [C('--seq-100'),C('--seq-200'),C('--seq-300'),C('--seq-400'),
+                  C('--seq-500'),C('--seq-600'),C('--seq-700')];
+    const svg = el('svg', { width: '100%', viewBox: `0 0 ${W} ${H}` });
+    dates.forEach((d, r) => {
+      const y = r * (ch + 2);
+      const t = el('text', { x: lab - 8, y: y + ch - 8, 'text-anchor': 'end' });
+      t.setAttribute('class', 'axis'); t.textContent = dlab(d); svg.appendChild(t);
+      for (let h = h0; h < h1; h++) {
+        const v = D.heatmap[d][h] || 0;
+        const cell = el('rect', { x: lab + (h - h0) * cw, y, width: cw - 2,
+          height: ch, rx: 3,
+          fill: v === 0 ? C('--page') : ramp[Math.min(6, Math.floor(v / max * 6.99))] });
+        cell.addEventListener('mousemove', ev => showTip(ev, '<b>' + dlab(d) +
+          ', ' + h + ':00–' + (h+1) + ':00</b><div class="t2">' + fmt(v) +
+          ' social/leisure requests</div>'));
+        cell.addEventListener('mouseleave', hideTip);
+        svg.appendChild(cell);
+      }
+    });
+    for (let h = h0; h < h1; h += 2) {
+      const t = el('text', { x: lab + (h - h0) * cw + 2, y: H - 8 });
+      t.setAttribute('class', 'axis'); t.textContent = h + ':00'; svg.appendChild(t);
+    }
+    host.appendChild(svg);
+  }
+
+  function trendChart() {
+    const host = document.getElementById('trendChart'); host.innerHTML = '';
+    const leg = document.getElementById('trendLegend');
+    leg.innerHTML = '<span><span class="sw" style="background:' + C('--s1') +
+      '"></span>All browsing</span><span><span class="sw" style="background:' +
+      C('--s2') + '"></span>Social &amp; leisure</span>';
+    const rows = D.daily; if (!rows.length) return;
+    const W = Math.min(host.clientWidth || 860, 900), H = 200,
+          padL = 46, padR = 96, padT = 12, padB = 26;
+    const max = Math.max(...rows.map(r => r.total), 1);
+    const x = i => padL + i * (W - padL - padR) / Math.max(rows.length - 1, 1);
+    const y = v => padT + (1 - v / max) * (H - padT - padB);
+    const svg = el('svg', { width: '100%', viewBox: `0 0 ${W} ${H}` });
+    for (let g = 0; g <= 3; g++) {
+      const v = Math.round(max * g / 3), yy = y(v);
+      svg.appendChild(el('line', { x1: padL, y1: yy, x2: W - padR, y2: yy,
+        stroke: C('--grid'), 'stroke-width': 1 }));
+      const t = el('text', { x: padL - 8, y: yy + 4, 'text-anchor': 'end' });
+      t.setAttribute('class', 'axis'); t.textContent = fmt(v); svg.appendChild(t);
+    }
+    const mkPath = (key, color) => {
+      const d = rows.map((r, i) => (i ? 'L' : 'M') + x(i) + ',' + y(r[key])).join('');
+      svg.appendChild(el('path', { d, fill: 'none', stroke: color,
+        'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+      const last = rows[rows.length - 1];
+      const t = el('text', { x: x(rows.length - 1) + 10, y: y(last[key]) + 4 });
+      t.setAttribute('class', 'dlab'); t.style.fill = C('--ink-2');
+      t.textContent = key === 'total' ? 'All' : 'Social';
+      svg.appendChild(t);
+    };
+    mkPath('total', C('--s1')); mkPath('distraction', C('--s2'));
+    rows.forEach((r, i) => {
+      const t = el('text', { x: x(i), y: H - 8, 'text-anchor': 'middle' });
+      t.setAttribute('class', 'axis'); t.textContent = dlab(r.date);
+      svg.appendChild(t);
+      const hit = el('rect', { x: x(i) - 20, y: 0, width: 40, height: H - padB,
+        fill: 'transparent' });
+      hit.addEventListener('mousemove', ev => {
+        cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i));
+        cross.style.opacity = 1;
+        [m1, m2].forEach((m, k) => { m.setAttribute('cx', x(i));
+          m.setAttribute('cy', y(k ? r.distraction : r.total)); m.style.opacity = 1; });
+        showTip(ev, '<b>' + dlab(r.date) + '</b><div class="t2">All browsing: ' +
+          fmt(r.total) + '<br>Social &amp; leisure: ' + fmt(r.distraction) + '</div>');
+      });
+      hit.addEventListener('mouseleave', () => { hideTip();
+        cross.style.opacity = 0; m1.style.opacity = 0; m2.style.opacity = 0; });
+      svg.appendChild(hit);
+    });
+    const cross = el('line', { y1: padT, y2: H - padB, stroke: C('--baseline'),
+      'stroke-width': 1 }); cross.style.opacity = 0; svg.insertBefore(cross, svg.firstChild);
+    const mk = c => { const m = el('circle', { r: 4.5, fill: c,
+      stroke: C('--surface-1'), 'stroke-width': 2 }); m.style.opacity = 0;
+      svg.appendChild(m); return m; };
+    const m1 = mk(C('--s1')), m2 = mk(C('--s2'));
+    host.appendChild(svg);
+  }
+
+  function domTable() {
+    const tb = document.querySelector('#domTable tbody'); tb.innerHTML = '';
+    for (const d of D.top_domains) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + d.domain + '</td><td><span class="pill">' +
+        d.category + '</span></td><td class="n">' + fmt(d.requests) + '</td>';
+      tb.appendChild(tr);
+    }
+  }
+
+  function render() { kpis(); catChart(); userChart(); heatChart();
+    trendChart(); domTable(); }
+  render();
+  addEventListener('resize', () => { clearTimeout(window.__rz);
+    window.__rz = setTimeout(render, 150); });
+})();
+</script>
+</body>
+</html>
