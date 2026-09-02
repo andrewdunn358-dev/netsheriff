@@ -15,9 +15,10 @@
     --surface-1:#fcfcfb; --page:#f9f9f7;
     --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
     --grid:#e1e0d9; --baseline:#c3c2b7; --ring:rgba(11,11,11,0.10);
-    --s1:#2a78d6; --s2:#eb6834; --deemph:#c9c8c1;
-    --seq-100:#cde2fb; --seq-200:#9ec5f4; --seq-300:#6da7ec; --seq-400:#3987e5;
-    --seq-500:#256abf; --seq-600:#184f95; --seq-700:#0d366b;
+    --s1:#2a78d6; --s2:#ee4b00; --deemph:#c9c8c1;
+    --brand-orange:#ee4b00; --brand-orange-dark:#c33e00;
+    --seq-100:#ffdccc; --seq-200:#ffb999; --seq-300:#ff8f5c; --seq-400:#ff5e14;
+    --seq-500:#d64400; --seq-600:#a33300; --seq-700:#662000;
     --critical:#d03b3b; --good-text:#006300;
   }
   @media (prefers-color-scheme: dark) {
@@ -26,9 +27,10 @@
       --surface-1:#1a1a19; --page:#0d0d0d;
       --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
       --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
-      --s1:#3987e5; --s2:#d95926; --deemph:#4a4a47;
-      --seq-100:#0d366b; --seq-200:#104281; --seq-300:#184f95; --seq-400:#256abf;
-      --seq-500:#3987e5; --seq-600:#6da7ec; --seq-700:#9ec5f4;
+      --s1:#3987e5; --s2:#ff5e14; --deemph:#4a4a47;
+      --brand-orange:#ff5e14; --brand-orange-dark:#ee4b00;
+      --seq-100:#6d2403; --seq-200:#953204; --seq-300:#c74205; --seq-400:#f95306;
+      --seq-500:#fa7c42; --seq-600:#fb9f74; --seq-700:#fdc1a5;
       --critical:#d03b3b; --good-text:#0ca30c;
     }
   }
@@ -37,9 +39,10 @@
     --surface-1:#1a1a19; --page:#0d0d0d;
     --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
     --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
-    --s1:#3987e5; --s2:#d95926; --deemph:#4a4a47;
-    --seq-100:#0d366b; --seq-200:#104281; --seq-300:#184f95; --seq-400:#256abf;
-    --seq-500:#3987e5; --seq-600:#6da7ec; --seq-700:#9ec5f4;
+    --s1:#3987e5; --s2:#ff5e14; --deemph:#4a4a47;
+    --brand-orange:#ff5e14; --brand-orange-dark:#ee4b00;
+    --seq-100:#6d2403; --seq-200:#953204; --seq-300:#c74205; --seq-400:#f95306;
+    --seq-500:#fa7c42; --seq-600:#fb9f74; --seq-700:#fdc1a5;
     --critical:#d03b3b; --good-text:#0ca30c;
   }
   * { box-sizing: border-box; }
@@ -47,23 +50,35 @@
     margin:0; background:var(--page); color:var(--ink-1);
     font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
   }
+  .topbar {
+    background:#0d0805; padding:10px 20px; display:flex; align-items:center;
+    gap:10px;
+  }
+  .topbar img { height:22px; width:auto; display:block; }
+  .topbar span { color:#f3ded3; font-size:13px; font-weight:600; letter-spacing:.01em; }
+  .topbar span b { color:var(--brand-orange); }
   .wrap { max-width:960px; margin:0 auto; padding:28px 20px 48px; }
   header.rpt { display:flex; justify-content:space-between; align-items:flex-end;
-    gap:12px; flex-wrap:wrap; margin-bottom:20px; }
-  header.rpt h1 { font-size:22px; margin:0 0 2px; }
+    gap:12px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:16px;
+    border-bottom:2px solid var(--brand-orange); }
+  header.rpt h1 { font-size:24px; margin:0 0 2px; letter-spacing:-.01em; }
   header.rpt .sub { color:var(--ink-2); font-size:13px; }
   .brand { text-align:right; color:var(--ink-3); font-size:12px; }
   .brand b { color:var(--ink-2); font-size:13px; }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
     gap:12px; margin-bottom:16px; }
   .tile { background:var(--surface-1); border:1px solid var(--ring);
-    border-radius:10px; padding:14px 16px; }
-  .tile .lbl { color:var(--ink-2); font-size:12px; margin-bottom:4px; }
-  .tile .val { font-size:30px; font-weight:650; letter-spacing:-.01em; }
+    border-top:3px solid var(--brand-orange);
+    border-radius:10px; padding:14px 16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .tile .lbl { color:var(--ink-2); font-size:12px; margin-bottom:4px;
+    text-transform:uppercase; letter-spacing:.03em; font-weight:600; }
+  .tile .val { font-size:32px; font-weight:700; letter-spacing:-.01em; }
   .tile .note { color:var(--ink-3); font-size:12px; margin-top:2px; }
   .tile .flag { color:var(--critical); font-weight:600; font-size:12px; }
   .card { background:var(--surface-1); border:1px solid var(--ring);
-    border-radius:10px; padding:16px 18px 12px; margin-bottom:16px; }
+    border-radius:10px; padding:16px 18px 12px; margin-bottom:16px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.04); }
   .card h2 { font-size:15px; margin:0 0 2px; }
   .card .desc { color:var(--ink-2); font-size:12.5px; margin:0 0 12px; }
   .legend { display:flex; gap:16px; font-size:12px; color:var(--ink-2);
@@ -89,17 +104,23 @@
     opacity:0; transition:opacity .08s; z-index:10; max-width:240px; }
   #tip .t2 { color:var(--ink-2); }
   .foot { color:var(--ink-3); font-size:11.5px; margin-top:20px; }
-  .toggle { background:none; border:1px solid var(--ring); color:var(--ink-2);
-    border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer;
+  .toggle { background:none; border:1px solid var(--brand-orange); color:var(--brand-orange-dark);
+    border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:600;
     display:inline-block; text-decoration:none; }
+  .toggle:hover { background:var(--brand-orange); color:#fff; }
   @media print {
-    .toggle, .no-print { display:none; }
+    .toggle, .no-print, .topbar { display:none; }
     body.viz-root { background:#fff; }
-    .card, .tile { break-inside:avoid; border-color:#ddd; }
+    .card, .tile { break-inside:avoid; border-color:#ddd; box-shadow:none; }
+    header.rpt { border-bottom-color:#ddd; }
   }
 </style>
 </head>
 <body class="viz-root">
+<div class="topbar">
+  <img src="{{ url_for('static', filename='img/badge.png') }}" alt="Net Sheriff">
+  <span>NET <b>SHERIFF</b></span>
+</div>
 <div class="wrap">
   <header class="rpt">
     <div>

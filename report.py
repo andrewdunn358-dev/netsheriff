@@ -20,6 +20,17 @@ import db as dbmod
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _static_url_stub(endpoint, **kwargs):
+    """report.py renders dashboard.html outside Flask's request context (for
+    PDF export / emailed reports), so the real url_for() isn't available.
+    The only url_for calls in dashboard.html are for static assets (favicon,
+    logo) which are either hidden in print output or non-critical if they
+    don't resolve — this just needs to not crash the render."""
+    if endpoint == "static":
+        return "/static/" + kwargs.get("filename", "")
+    return "#"
+
+
 def render_html(conn, tenant_row, days, brand):
     last = conn.execute("SELECT MAX(ts) m FROM dns_log WHERE tenant=?",
                         (tenant_row["name"],)).fetchone()["m"]
@@ -31,7 +42,7 @@ def render_html(conn, tenant_row, days, brand):
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(HERE, "templates")))
     return env.get_template("dashboard.html").render(
         data=data, display_name=tenant_row["display_name"], brand=brand,
-        show_logout=False, export_url="")
+        show_logout=False, export_url="", url_for=_static_url_stub)
 
 
 def find_chromium():
