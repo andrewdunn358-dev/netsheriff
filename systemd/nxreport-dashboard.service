@@ -6,7 +6,7 @@ After=network.target
 WorkingDirectory=/opt/netsheriff
 EnvironmentFile=/opt/netsheriff/.env
 Environment=NXREPORT_DB=/opt/netsheriff/nxreport.db
-Environment=NXREPORT_BRAND=Net Sheriff
+Environment="NXREPORT_BRAND=Net Sheriff"
 ExecStart=/usr/local/bin/gunicorn -w 2 -b 127.0.0.1:8080 app:app
 Restart=always
 RestartSec=3
