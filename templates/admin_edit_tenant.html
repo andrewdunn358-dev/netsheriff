@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ brand }} — New Client</title>
+<title>{{ brand }} — Edit Client</title>
 <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
 <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='img/favicon-16.png') }}">
 <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
@@ -15,7 +15,7 @@
     --surface-1:#fcfcfb; --page:#f9f9f7;
     --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
     --grid:#e1e0d9; --ring:rgba(11,11,11,0.10);
-    --s1:#2a78d6; --critical:#d03b3b;
+    --brand-orange:#ee4b00; --critical:#d03b3b;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -23,7 +23,6 @@
       --surface-1:#1a1a19; --page:#0d0d0d;
       --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
       --grid:#2c2c2a; --ring:rgba(255,255,255,0.10);
-      --s1:#3987e5; --critical:#e35b5b;
     }
   }
   * { box-sizing: border-box; }
@@ -34,7 +33,7 @@
   .wrap { max-width:480px; margin:0 auto; padding:28px 20px 48px; }
   header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   header h1 { font-size:20px; margin:0; }
-  header a { font-size:13px; color:var(--s1); text-decoration:none; }
+  header a { font-size:13px; color:var(--brand-orange); text-decoration:none; }
   .card {
     background:var(--surface-1); border:1px solid var(--ring); border-radius:12px;
     padding:24px 22px;
@@ -46,10 +45,11 @@
     border:1px solid var(--grid); border-radius:8px; background:var(--page);
     color:var(--ink-1);
   }
-  input:focus { outline:2px solid var(--s1); outline-offset:1px; }
+  input:disabled { color:var(--ink-3); background:var(--grid); }
+  input:focus { outline:2px solid var(--brand-orange); outline-offset:1px; }
   button {
     width:100%; padding:10px; font-size:14px; font-weight:600; color:#fff;
-    background:var(--s1); border:none; border-radius:8px; cursor:pointer; margin-top:6px;
+    background:var(--brand-orange); border:none; border-radius:8px; cursor:pointer; margin-top:6px;
   }
   button:hover { filter:brightness(0.92); }
   .error {
@@ -61,32 +61,28 @@
 <body class="viz-root">
   <div class="wrap">
     <header>
-      <h1>New client</h1>
+      <h1>Edit client</h1>
       <a href="/admin/dashboard">&larr; Back</a>
     </header>
     <div class="card">
       {% if error %}<div class="error">{{ error }}</div>{% endif %}
       <form method="post">
-        <label for="name">Operator name</label>
-        <input id="name" name="name" required>
-        <p class="hint">Must exactly match the NxCloud operator name — this is what links their DNS logs to this dashboard.</p>
+        <label>Operator name</label>
+        <input value="{{ t.name }}" disabled>
+        <p class="hint">Can't be changed here — it must stay matched to the NxCloud operator name.</p>
+
+        <label>Username</label>
+        <input value="{{ t.username }}" disabled>
+        <p class="hint">Login username isn't editable here. Use "Reset password" from the client list if they need new credentials.</p>
 
         <label for="display_name">Display name</label>
-        <input id="display_name" name="display_name" required>
-        <p class="hint">What the client sees, e.g. "NCS Support Solutions".</p>
+        <input id="display_name" name="display_name" value="{{ t.display_name }}" required>
 
-        <label for="username">Login username</label>
-        <input id="username" name="username" required>
+        <label for="email">Contact email</label>
+        <input id="email" name="email" type="email" value="{{ t.email or '' }}" required>
+        <p class="hint">Used for password-reset links and the weekly PDF report.</p>
 
-        <label for="password">Login password</label>
-        <input id="password" name="password" type="password" minlength="8" required>
-        <p class="hint">At least 8 characters. Share this with the client securely.</p>
-
-        <label for="email">Client contact email</label>
-        <input id="email" name="email" type="email" required>
-        <p class="hint">Required — used for password-reset links and the weekly PDF report.</p>
-
-        <button type="submit">Create client</button>
+        <button type="submit">Save changes</button>
       </form>
     </div>
   </div>

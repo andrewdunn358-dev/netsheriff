@@ -110,6 +110,15 @@ def set_admin_password(conn, username, new_password):
     conn.commit()
 
 
+def update_tenant(conn, name, display_name, email):
+    """Update a tenant's display name/email only — deliberately never touches
+    username or password_hash, so editing details can't accidentally reset
+    a client's login."""
+    conn.execute("UPDATE tenants SET display_name=?, email=? WHERE name=?",
+                 (display_name, email, name))
+    conn.commit()
+
+
 def set_tenant_password(conn, name, new_password):
     """Set a tenant's password directly (admin-triggered reset) and clear any
     outstanding self-service reset token."""

@@ -185,6 +185,8 @@ def admin_new_tenant():
         email = request.form.get("email", "").strip() or None
         if not (name and display_name and username and len(password) >= 8):
             error = "All fields are required and password must be at least 8 characters."
+        elif not email:
+            error = "Email is required — it's needed for password-reset links and the weekly report."
         else:
             try:
                 dbmod.create_tenant(conn, name, display_name, username, password, email)
@@ -192,6 +194,27 @@ def admin_new_tenant():
             except Exception as e:
                 error = f"Couldn't create tenant — {e}"
     return render_template("admin_new_tenant.html", brand=BRAND, error=error)
+
+
+@app.route("/admin/tenants/<name>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_edit_tenant(name):
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
+    if not t:
+        abort(404)
+    error = None
+    if request.method == "POST":
+        display_name = request.form.get("display_name", "").strip()
+        email = request.form.get("email", "").strip() or None
+        if not display_name:
+            error = "Display name is required."
+        elif not email:
+            error = "Email is required — it's needed for password-reset links and the weekly report."
+        else:
+            dbmod.update_tenant(conn, name, display_name, email)
+            return redirect(url_for("admin_dashboard"))
+    return render_template("admin_edit_tenant.html", brand=BRAND, error=error, t=t)
 
 
 @app.route("/admin/tenants/<name>/reset", methods=["POST"])
