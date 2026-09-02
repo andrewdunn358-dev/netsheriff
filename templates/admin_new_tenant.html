@@ -15,7 +15,7 @@
     --surface-1:#fcfcfb; --page:#f9f9f7;
     --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
     --grid:#e1e0d9; --ring:rgba(11,11,11,0.10);
-    --s1:#2a78d6; --critical:#d03b3b;
+    --brand-orange:#ee4b00; --critical:#d03b3b;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -23,7 +23,7 @@
       --surface-1:#1a1a19; --page:#0d0d0d;
       --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
       --grid:#2c2c2a; --ring:rgba(255,255,255,0.10);
-      --s1:#3987e5; --critical:#e35b5b;
+      --brand-orange:#ee4b00; --critical:#e35b5b;
     }
   }
   * { box-sizing: border-box; }
@@ -34,7 +34,7 @@
   .wrap { max-width:480px; margin:0 auto; padding:28px 20px 48px; }
   header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
   header h1 { font-size:20px; margin:0; }
-  header a { font-size:13px; color:var(--s1); text-decoration:none; }
+  header a { font-size:13px; color:var(--brand-orange); text-decoration:none; }
   .card {
     background:var(--surface-1); border:1px solid var(--ring); border-radius:12px;
     padding:24px 22px;
@@ -46,10 +46,10 @@
     border:1px solid var(--grid); border-radius:8px; background:var(--page);
     color:var(--ink-1);
   }
-  input:focus { outline:2px solid var(--s1); outline-offset:1px; }
+  input:focus { outline:2px solid var(--brand-orange); outline-offset:1px; }
   button {
     width:100%; padding:10px; font-size:14px; font-weight:600; color:#fff;
-    background:var(--s1); border:none; border-radius:8px; cursor:pointer; margin-top:6px;
+    background:var(--brand-orange); border:none; border-radius:8px; cursor:pointer; margin-top:6px;
   }
   button:hover { filter:brightness(0.92); }
   .error {

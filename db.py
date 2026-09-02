@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS tenants (
 CREATE TABLE IF NOT EXISTS admin_users (
     username TEXT PRIMARY KEY,     -- staff login, separate from client tenants entirely
     password_hash TEXT NOT NULL,
-    email TEXT
+    email TEXT,
+    reset_token TEXT UNIQUE,       -- set when a password-reset email is requested
+    reset_expiry TEXT              -- ISO timestamp; token invalid after this
 );
 """
 
@@ -105,9 +107,36 @@ def list_admins(conn):
 
 def set_admin_password(conn, username, new_password):
     from werkzeug.security import generate_password_hash
-    conn.execute("UPDATE admin_users SET password_hash=? WHERE username=?",
-                 (generate_password_hash(new_password), username))
+    conn.execute("UPDATE admin_users SET password_hash=?, reset_token=NULL, reset_expiry=NULL"
+                 " WHERE username=?", (generate_password_hash(new_password), username))
     conn.commit()
+
+
+def create_admin_reset_token(conn, identifier):
+    """identifier = admin's username OR email. Returns the admin row (with a
+    fresh reset_token, valid 1 hour) or None if no match."""
+    import secrets
+    from datetime import datetime, timedelta
+    row = conn.execute("SELECT * FROM admin_users WHERE username=? OR email=?",
+                        (identifier, identifier)).fetchone()
+    if not row:
+        return None
+    token = secrets.token_urlsafe(32)
+    expiry = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+    conn.execute("UPDATE admin_users SET reset_token=?, reset_expiry=? WHERE username=?",
+                 (token, expiry, row["username"]))
+    conn.commit()
+    return dict(row, reset_token=token)
+
+
+def get_admin_by_reset_token(conn, token):
+    from datetime import datetime
+    row = conn.execute("SELECT * FROM admin_users WHERE reset_token=?", (token,)).fetchone()
+    if not row or not row["reset_expiry"]:
+        return None
+    if datetime.utcnow().isoformat() > row["reset_expiry"]:
+        return None
+    return row
 
 
 def update_tenant(conn, name, display_name, email):
@@ -186,6 +215,11 @@ def connect(path):
         conn.execute("ALTER TABLE tenants ADD COLUMN reset_token TEXT")
     if "reset_expiry" not in cols:
         conn.execute("ALTER TABLE tenants ADD COLUMN reset_expiry TEXT")
+    admin_cols = {r["name"] for r in conn.execute("PRAGMA table_info(admin_users)")}
+    if "reset_token" not in admin_cols:
+        conn.execute("ALTER TABLE admin_users ADD COLUMN reset_token TEXT")
+    if "reset_expiry" not in admin_cols:
+        conn.execute("ALTER TABLE admin_users ADD COLUMN reset_expiry TEXT")
     conn.commit()
     return conn
 

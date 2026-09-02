@@ -143,6 +143,45 @@ def reset_password(token):
     return render_template("reset_password.html", brand=BRAND, error=error, token=token)
 
 
+@app.route("/admin/forgot-password", methods=["GET", "POST"])
+def admin_forgot_password():
+    message = None
+    if request.method == "POST":
+        conn = get_conn()
+        identifier = request.form.get("identifier", "").strip()
+        a = dbmod.create_admin_reset_token(conn, identifier)
+        # Same generic message either way — don't reveal whether a match
+        # was found, to avoid letting someone probe for valid usernames.
+        if a and a.get("email"):
+            link = url_for("admin_reset_password", token=a["reset_token"], _external=True)
+            try:
+                mailer.send_reset_email(a["email"], link, f"{BRAND} Admin")
+            except Exception:
+                pass
+        message = ("If that username or email matches an admin account, we've "
+                   "sent a password reset link to the email on file.")
+    return render_template("admin_forgot_password.html", brand=BRAND, message=message)
+
+
+@app.route("/admin/reset-password/<token>", methods=["GET", "POST"])
+def admin_reset_password(token):
+    conn = get_conn()
+    a = dbmod.get_admin_by_reset_token(conn, token)
+    if not a:
+        return render_template("admin_reset_password.html", brand=BRAND, invalid=True)
+    error = None
+    if request.method == "POST":
+        pw1, pw2 = request.form.get("password", ""), request.form.get("password2", "")
+        if len(pw1) < 8:
+            error = "Password must be at least 8 characters."
+        elif pw1 != pw2:
+            error = "Passwords don't match."
+        else:
+            dbmod.set_admin_password(conn, a["username"], pw1)
+            return redirect(url_for("admin_login"))
+    return render_template("admin_reset_password.html", brand=BRAND, error=error, token=token)
+
+
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
     error = None
@@ -248,6 +287,8 @@ def admin_new_admin():
         email = request.form.get("email", "").strip() or None
         if not (username and len(password) >= 8):
             error = "Username is required and password must be at least 8 characters."
+        elif not email:
+            error = "Email is required — it's needed so this admin can reset their own password if forgotten."
         else:
             dbmod.create_admin(conn, username, password, email)
             return redirect(url_for("admin_admins"))
