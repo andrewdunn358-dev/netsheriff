@@ -108,8 +108,15 @@
     border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; font-weight:600;
     display:inline-block; text-decoration:none; }
   .toggle:hover { background:var(--brand-orange); color:#fff; }
+  .rangebar { display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    margin:16px 0 20px; }
+  .rangebar form { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+  .rangebar input[type=date] { font-size:12px; padding:4px 6px; border:1px solid var(--ring);
+    border-radius:6px; background:var(--surface-1); color:var(--ink-1); }
+  .rangebar span.sep { color:var(--ink-3); font-size:12px; }
+  .rangebar .toggle.active { background:var(--brand-orange); color:#fff; }
   @media print {
-    .toggle, .no-print, .topbar { display:none; }
+    .toggle, .no-print, .topbar, .rangebar { display:none; }
     body.viz-root { background:#fff; }
     .card, .tile { break-inside:avoid; border-color:#ddd; box-shadow:none; }
     header.rpt { border-bottom-color:#ddd; }
@@ -117,27 +124,46 @@
 </style>
 </head>
 <body class="viz-root">
+{% if not hide_brand %}
 <div class="topbar">
   <img src="{{ url_for('static', filename='img/badge.png') }}" alt="Net Sheriff">
   <span>NET <b>SHERIFF</b></span>
 </div>
+{% endif %}
 <div class="wrap">
   <header class="rpt">
     <div>
       <h1>{{ display_name }}</h1>
       <div class="sub">Internet usage report · <span id="period"></span></div>
     </div>
+    {% if not hide_brand %}
     <div class="brand">
       <b>{{ brand }}</b><br>Managed web filtering &amp; reporting
       <div style="margin-top:6px">
         <button class="toggle" id="themeBtn">Dark / light</button>
         <a class="toggle" href="{{ export_url }}">Export PDF</a>
+        <a class="toggle" href="{{ export_url }}{{ '&' if '?' in export_url else '?' }}brand=0" title="PDF without Net Sheriff branding">Export (no branding)</a>
         {% if show_logout %}
         <a class="toggle" href="/logout">Log out</a>
         {% endif %}
       </div>
     </div>
+    {% endif %}
   </header>
+
+  {% if not hide_brand %}
+  <div class="rangebar no-print">
+    <a class="toggle" href="?days=7">Last 7 days</a>
+    <a class="toggle" href="?days=30">Last 30 days</a>
+    <a class="toggle" href="?days=90">Last 90 days</a>
+    <form method="get">
+      <input type="date" name="start" value="{{ range_start }}">
+      <span class="sep">to</span>
+      <input type="date" name="end" value="{{ range_end }}">
+      <button type="submit" class="toggle">Apply</button>
+    </form>
+  </div>
+  {% endif %}
 
   <div class="kpis" id="kpis"></div>
 
@@ -202,7 +228,8 @@
   const p1 = D.daily.length ? D.daily[D.daily.length-1].date : D.end;
   document.getElementById('period').textContent =
     dlab(p0, true) + ' – ' + dlab(p1, true) + ' ' + new Date(p1).getFullYear();
-  document.getElementById('themeBtn').onclick = () => {
+  const themeBtn = document.getElementById('themeBtn');
+  if (themeBtn) themeBtn.onclick = () => {
     const r = document.documentElement;
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     const cur = r.dataset.theme || (dark ? 'dark' : 'light');

@@ -49,27 +49,53 @@ def admin_required(view):
     return wrapped
 
 
-def render_dashboard(conn, t, days, show_logout, export_url):
-    # default period: last N days ending at the most recent log we hold
+def resolve_range(conn, tenant_name, args):
+    """Figure out the (start, end) inclusive date strings to show, from
+    query args. Both are plain YYYY-MM-DD dates a human would recognise —
+    callers needing a SQL-ready exclusive end should use sql_end_exclusive().
+
+    Explicit ?start=YYYY-MM-DD&end=YYYY-MM-DD wins if both are valid dates
+    and start <= end; otherwise falls back to ?days=N (capped 1-90) ending
+    at the most recent log we hold for this tenant."""
+    start, end = args.get("start"), args.get("end")
+    if start and end:
+        try:
+            d0 = datetime.strptime(start, "%Y-%m-%d")
+            d1 = datetime.strptime(end, "%Y-%m-%d")
+            if d0 <= d1:
+                return start, end
+        except ValueError:
+            pass
+    days = max(1, min(int(args.get("days", 7) or 7), 90))
     last = conn.execute("SELECT MAX(ts) m FROM dns_log WHERE tenant=?",
-                        (t["name"],)).fetchone()["m"]
-    end_dt = (datetime.strptime(last[:10], "%Y-%m-%d") + timedelta(days=1)
-              if last else datetime.now())
-    start = (end_dt - timedelta(days=days)).strftime("%Y-%m-%d")
-    end = end_dt.strftime("%Y-%m-%d")
-    data = dbmod.dashboard_data(conn, t["name"], start, end)
+                        (tenant_name,)).fetchone()["m"]
+    end_dt = (datetime.strptime(last[:10], "%Y-%m-%d")
+              if last else (datetime.now() - timedelta(days=1)))
+    start_dt = end_dt - timedelta(days=days - 1)
+    return start_dt.strftime("%Y-%m-%d"), end_dt.strftime("%Y-%m-%d")
+
+
+def sql_end_exclusive(end_inclusive):
+    """dashboard_data's query is ts < end, so the inclusive end date a human
+    picked needs pushing one day later to actually include that whole day."""
+    return (datetime.strptime(end_inclusive, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+
+
+def render_dashboard(conn, t, start, end, show_logout, export_url, hide_brand=False):
+    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end))
     return render_template("dashboard.html", data=data,
                            display_name=t["display_name"], brand=BRAND,
-                           show_logout=show_logout, export_url=export_url)
+                           show_logout=show_logout, export_url=export_url,
+                           hide_brand=hide_brand, range_start=start, range_end=end)
 
 
-def build_pdf(conn, t, days):
+def build_pdf(conn, t, start, end, hide_brand=False):
     """Render the dashboard HTML and convert to PDF via report.py's existing
     Chromium logic. Returns (pdf_path, error) — error is a string if
     Chromium isn't available or conversion fails, in which case pdf_path
     is None."""
     import tempfile
-    html = reportmod.render_html(conn, t, days, BRAND)
+    html = reportmod.render_html(conn, t, start, sql_end_exclusive(end), BRAND, hide_brand=hide_brand)
     tmpdir = tempfile.mkdtemp()
     html_path = os.path.join(tmpdir, "report.html")
     pdf_path = os.path.join(tmpdir, "report.pdf")
@@ -336,9 +362,9 @@ def dashboard():
     if not t:
         session.clear()
         return redirect(url_for("login"))
-    days = min(int(request.args.get("days", 7)), 90)
-    export_url = url_for("dashboard_export", days=days)
-    return render_dashboard(conn, t, days, show_logout=True, export_url=export_url)
+    start, end = resolve_range(conn, t["name"], request.args)
+    export_url = url_for("dashboard_export", start=start, end=end)
+    return render_dashboard(conn, t, start, end, show_logout=True, export_url=export_url)
 
 
 @app.route("/dashboard/export.pdf")
@@ -349,8 +375,9 @@ def dashboard_export():
     if not t:
         session.clear()
         return redirect(url_for("login"))
-    days = min(int(request.args.get("days", 7)), 90)
-    pdf_path, error = build_pdf(conn, t, days)
+    start, end = resolve_range(conn, t["name"], request.args)
+    hide_brand = request.args.get("brand") == "0"
+    pdf_path, error = build_pdf(conn, t, start, end, hide_brand=hide_brand)
     if error:
         abort(503, description=f"PDF export unavailable on this server: {error}")
     return send_file(pdf_path, as_attachment=True, mimetype="application/pdf",
@@ -366,9 +393,9 @@ def tenant_dash(token):
     t = conn.execute("SELECT * FROM tenants WHERE token=?", (token,)).fetchone()
     if not t:
         abort(404)
-    days = min(int(request.args.get("days", 7)), 90)
-    export_url = url_for("tenant_dash_export", token=token, days=days)
-    return render_dashboard(conn, t, days, show_logout=False, export_url=export_url)
+    start, end = resolve_range(conn, t["name"], request.args)
+    export_url = url_for("tenant_dash_export", token=token, start=start, end=end)
+    return render_dashboard(conn, t, start, end, show_logout=False, export_url=export_url)
 
 
 @app.route("/t/<token>/export.pdf")
@@ -377,8 +404,9 @@ def tenant_dash_export(token):
     t = conn.execute("SELECT * FROM tenants WHERE token=?", (token,)).fetchone()
     if not t:
         abort(404)
-    days = min(int(request.args.get("days", 7)), 90)
-    pdf_path, error = build_pdf(conn, t, days)
+    start, end = resolve_range(conn, t["name"], request.args)
+    hide_brand = request.args.get("brand") == "0"
+    pdf_path, error = build_pdf(conn, t, start, end, hide_brand=hide_brand)
     if error:
         abort(503, description=f"PDF export unavailable on this server: {error}")
     return send_file(pdf_path, as_attachment=True, mimetype="application/pdf",

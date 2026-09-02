@@ -31,18 +31,15 @@ def _static_url_stub(endpoint, **kwargs):
     return "#"
 
 
-def render_html(conn, tenant_row, days, brand):
-    last = conn.execute("SELECT MAX(ts) m FROM dns_log WHERE tenant=?",
-                        (tenant_row["name"],)).fetchone()["m"]
-    end_dt = (datetime.strptime(last[:10], "%Y-%m-%d") + timedelta(days=1)
-              if last else datetime.now())
-    start = (end_dt - timedelta(days=days)).strftime("%Y-%m-%d")
-    end = end_dt.strftime("%Y-%m-%d")
+def render_html(conn, tenant_row, start, end, brand, hide_brand=False):
+    """start/end are SQL-ready: start inclusive, end EXCLUSIVE (i.e. end
+    should already be one day past the last day you want included)."""
     data = dbmod.dashboard_data(conn, tenant_row["name"], start, end)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(HERE, "templates")))
     return env.get_template("dashboard.html").render(
         data=data, display_name=tenant_row["display_name"], brand=brand,
-        show_logout=False, export_url="", url_for=_static_url_stub)
+        show_logout=False, export_url="", url_for=_static_url_stub,
+        hide_brand=hide_brand)
 
 
 def find_chromium():
@@ -100,7 +97,14 @@ def main():
     t = conn.execute("SELECT * FROM tenants WHERE name=?", (args.tenant,)).fetchone()
     if not t:
         raise SystemExit(f"Unknown tenant '{args.tenant}'")
-    html = render_html(conn, t, args.days, args.brand)
+
+    last = conn.execute("SELECT MAX(ts) m FROM dns_log WHERE tenant=?",
+                        (args.tenant,)).fetchone()["m"]
+    end_dt = (datetime.strptime(last[:10], "%Y-%m-%d") + timedelta(days=1)
+              if last else datetime.now())
+    start = (end_dt - timedelta(days=args.days)).strftime("%Y-%m-%d")
+    end = end_dt.strftime("%Y-%m-%d")
+    html = render_html(conn, t, start, end, args.brand)
 
     html_path = args.html or os.path.join(tempfile.gettempdir(), f"{args.tenant}-report.html")
     with open(html_path, "w") as f:
