@@ -19,10 +19,39 @@ CREATE INDEX IF NOT EXISTS idx_log_tenant_ts ON dns_log(tenant, ts);
 CREATE TABLE IF NOT EXISTS tenants (
     name TEXT PRIMARY KEY,         -- matches NxCloud operator name
     display_name TEXT NOT NULL,
-    token TEXT NOT NULL UNIQUE,    -- unguessable URL token for client dashboard
-    email TEXT                     -- where the PDF report goes
+    token TEXT NOT NULL UNIQUE,    -- unguessable URL token, kept as a fallback link
+    email TEXT,                    -- where the PDF report goes
+    username TEXT UNIQUE,          -- client's login username
+    password_hash TEXT             -- werkzeug hash; NULL = login disabled for this tenant
 );
 """
+
+
+def create_tenant(conn, name, display_name, username, password, email=None, token=None):
+    """Register a tenant with real login credentials.
+
+    `name` must exactly match the NxCloud operator name — it's the join key
+    against dns_log.tenant. Returns the generated token (useful as a backup
+    link if a client ever gets locked out of the login form).
+    """
+    import secrets
+    from werkzeug.security import generate_password_hash
+    token = token or secrets.token_hex(12)
+    conn.execute(
+        "INSERT INTO tenants (name, display_name, token, email, username, password_hash)"
+        " VALUES (?,?,?,?,?,?)",
+        (name, display_name, token, email, username, generate_password_hash(password)))
+    conn.commit()
+    return token
+
+
+def verify_login(conn, username, password):
+    """Return the tenant row if username/password match, else None."""
+    from werkzeug.security import check_password_hash
+    row = conn.execute("SELECT * FROM tenants WHERE username=?", (username,)).fetchone()
+    if row and row["password_hash"] and check_password_hash(row["password_hash"], password):
+        return row
+    return None
 
 # Map raw NxFilter/Jahaslist category names -> client-friendly labels.
 FRIENDLY = {
@@ -42,6 +71,14 @@ def connect(path):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    # Migrate DBs created before login existed (CREATE TABLE IF NOT EXISTS
+    # won't add columns to an already-existing tenants table).
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(tenants)")}
+    if "username" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN username TEXT")
+    if "password_hash" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN password_hash TEXT")
+    conn.commit()
     return conn
 
 
