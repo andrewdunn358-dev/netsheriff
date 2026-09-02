@@ -1,0 +1,13 @@
+[Unit]
+Description=NxReport syslog collector
+After=network.target
+
+[Service]
+WorkingDirectory=/opt/netsheriff
+ExecStart=/usr/bin/python3 /opt/netsheriff/collector.py --db /opt/netsheriff/nxreport.db --port 5140
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target
