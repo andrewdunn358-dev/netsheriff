@@ -86,7 +86,8 @@
   #tip .t2 { color:var(--ink-2); }
   .foot { color:var(--ink-3); font-size:11.5px; margin-top:20px; }
   .toggle { background:none; border:1px solid var(--ring); color:var(--ink-2);
-    border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; }
+    border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer;
+    display:inline-block; text-decoration:none; }
   @media print {
     .toggle, .no-print { display:none; }
     body.viz-root { background:#fff; }
@@ -103,7 +104,13 @@
     </div>
     <div class="brand">
       <b>{{ brand }}</b><br>Managed web filtering &amp; reporting
-      <div style="margin-top:6px"><button class="toggle" id="themeBtn">Dark / light</button></div>
+      <div style="margin-top:6px">
+        <button class="toggle" id="themeBtn">Dark / light</button>
+        <a class="toggle" href="{{ export_url }}">Export PDF</a>
+        {% if show_logout %}
+        <a class="toggle" href="/logout">Log out</a>
+        {% endif %}
+      </div>
     </div>
   </header>
 

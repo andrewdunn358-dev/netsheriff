@@ -14,9 +14,10 @@ Run:  python3 app.py --db nxreport.db --port 8080
 import argparse, os, secrets
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, abort, redirect, render_template, request, session, url_for
+from flask import Flask, abort, redirect, render_template, request, send_file, session, url_for
 import db as dbmod
 import mailer
+import report as reportmod
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("NXREPORT_SECRET_KEY", secrets.token_hex(32))
@@ -48,7 +49,7 @@ def admin_required(view):
     return wrapped
 
 
-def render_dashboard(conn, t, days):
+def render_dashboard(conn, t, days, show_logout, export_url):
     # default period: last N days ending at the most recent log we hold
     last = conn.execute("SELECT MAX(ts) m FROM dns_log WHERE tenant=?",
                         (t["name"],)).fetchone()["m"]
@@ -58,7 +59,27 @@ def render_dashboard(conn, t, days):
     end = end_dt.strftime("%Y-%m-%d")
     data = dbmod.dashboard_data(conn, t["name"], start, end)
     return render_template("dashboard.html", data=data,
-                           display_name=t["display_name"], brand=BRAND)
+                           display_name=t["display_name"], brand=BRAND,
+                           show_logout=show_logout, export_url=export_url)
+
+
+def build_pdf(conn, t, days):
+    """Render the dashboard HTML and convert to PDF via report.py's existing
+    Chromium logic. Returns (pdf_path, error) — error is a string if
+    Chromium isn't available or conversion fails, in which case pdf_path
+    is None."""
+    import tempfile
+    html = reportmod.render_html(conn, t, days, BRAND)
+    tmpdir = tempfile.mkdtemp()
+    html_path = os.path.join(tmpdir, "report.html")
+    pdf_path = os.path.join(tmpdir, "report.pdf")
+    with open(html_path, "w") as f:
+        f.write(html)
+    try:
+        reportmod.html_to_pdf(html_path, pdf_path)
+    except Exception as e:
+        return None, str(e)
+    return pdf_path, None
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -194,7 +215,24 @@ def dashboard():
         session.clear()
         return redirect(url_for("login"))
     days = min(int(request.args.get("days", 7)), 90)
-    return render_dashboard(conn, t, days)
+    export_url = url_for("dashboard_export", days=days)
+    return render_dashboard(conn, t, days, show_logout=True, export_url=export_url)
+
+
+@app.route("/dashboard/export.pdf")
+@login_required
+def dashboard_export():
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (session["tenant"],)).fetchone()
+    if not t:
+        session.clear()
+        return redirect(url_for("login"))
+    days = min(int(request.args.get("days", 7)), 90)
+    pdf_path, error = build_pdf(conn, t, days)
+    if error:
+        abort(503, description=f"PDF export unavailable on this server: {error}")
+    return send_file(pdf_path, as_attachment=True, mimetype="application/pdf",
+                     download_name=f"{t['name']}-internet-usage-report.pdf")
 
 
 @app.route("/t/<token>")
@@ -207,7 +245,22 @@ def tenant_dash(token):
     if not t:
         abort(404)
     days = min(int(request.args.get("days", 7)), 90)
-    return render_dashboard(conn, t, days)
+    export_url = url_for("tenant_dash_export", token=token, days=days)
+    return render_dashboard(conn, t, days, show_logout=False, export_url=export_url)
+
+
+@app.route("/t/<token>/export.pdf")
+def tenant_dash_export(token):
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE token=?", (token,)).fetchone()
+    if not t:
+        abort(404)
+    days = min(int(request.args.get("days", 7)), 90)
+    pdf_path, error = build_pdf(conn, t, days)
+    if error:
+        abort(503, description=f"PDF export unavailable on this server: {error}")
+    return send_file(pdf_path, as_attachment=True, mimetype="application/pdf",
+                     download_name=f"{t['name']}-internet-usage-report.pdf")
 
 
 def main():

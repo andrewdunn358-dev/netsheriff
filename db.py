@@ -35,18 +35,30 @@ CREATE TABLE IF NOT EXISTS admin_users (
 
 
 def create_tenant(conn, name, display_name, username, password, email=None, token=None):
-    """Register a tenant with real login credentials.
+    """Register (or update) a tenant with real login credentials.
 
     `name` must exactly match the NxCloud operator name — it's the join key
-    against dns_log.tenant. Returns the generated token (useful as a backup
-    link if a client ever gets locked out of the login form).
+    against dns_log.tenant. Safe to call again for an existing tenant (e.g.
+    fixing a typo, or re-issuing credentials) — updates in place rather
+    than failing on the name/token already existing. Preserves the current
+    token if one isn't explicitly passed, so existing fallback links keep
+    working. Returns the token in use (existing or newly generated).
     """
     import secrets
     from werkzeug.security import generate_password_hash
-    token = token or secrets.token_hex(12)
-    conn.execute(
-        "INSERT INTO tenants (name, display_name, token, email, username, password_hash)"
-        " VALUES (?,?,?,?,?,?)",
+    existing = conn.execute("SELECT token FROM tenants WHERE name=?", (name,)).fetchone()
+    if token is None:
+        token = existing["token"] if existing else secrets.token_hex(12)
+    conn.execute("""
+        INSERT INTO tenants (name, display_name, token, email, username, password_hash)
+        VALUES (?,?,?,?,?,?)
+        ON CONFLICT(name) DO UPDATE SET
+            display_name=excluded.display_name,
+            token=excluded.token,
+            email=excluded.email,
+            username=excluded.username,
+            password_hash=excluded.password_hash
+        """,
         (name, display_name, token, email, username, generate_password_hash(password)))
     conn.commit()
     return token

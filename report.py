@@ -30,7 +30,8 @@ def render_html(conn, tenant_row, days, brand):
     data = dbmod.dashboard_data(conn, tenant_row["name"], start, end)
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(HERE, "templates")))
     return env.get_template("dashboard.html").render(
-        data=data, display_name=tenant_row["display_name"], brand=brand)
+        data=data, display_name=tenant_row["display_name"], brand=brand,
+        show_logout=False, export_url="")
 
 
 def find_chromium():

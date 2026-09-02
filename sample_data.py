@@ -84,9 +84,19 @@ def main():
 
     conn = dbmod.connect(args.db)
     conn.execute("DELETE FROM dns_log WHERE tenant=?", (TENANT,))
-    conn.execute("INSERT OR REPLACE INTO tenants (name, display_name, token, email)"
-                 " VALUES (?,?,?,?)",
-                 (TENANT, "Brightside Accounting Ltd", "demo-brightside-7f3a", None))
+    # UPDATE if the tenant already exists (preserves any username/password
+    # already set — a blanket INSERT OR REPLACE would silently wipe login
+    # credentials if this script is re-run against a tenant that's already
+    # been given real login access), otherwise INSERT fresh.
+    existing = conn.execute("SELECT 1 FROM tenants WHERE name=?", (TENANT,)).fetchone()
+    if existing:
+        conn.execute("UPDATE tenants SET display_name=?, token=COALESCE(token,?), email=COALESCE(email,?)"
+                     " WHERE name=?",
+                     ("Brightside Accounting Ltd", "demo-brightside-7f3a", None, TENANT))
+    else:
+        conn.execute("INSERT INTO tenants (name, display_name, token, email)"
+                     " VALUES (?,?,?,?)",
+                     (TENANT, "Brightside Accounting Ltd", "demo-brightside-7f3a", None))
     rows = []
     start = datetime.strptime(args.start, "%Y-%m-%d")
     for i in range(args.days):
