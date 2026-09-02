@@ -80,7 +80,7 @@
 
     {% if tenants %}
     <table>
-      <tr><th>Client</th><th>Username</th><th>Email</th><th>Dashboard</th><th></th><th></th></tr>
+      <tr><th>Client</th><th>Username</th><th>Email</th><th>Dashboard</th><th></th><th></th><th></th></tr>
       {% for t in tenants %}
       <tr>
         <td>{{ t.display_name }}</td>
@@ -88,6 +88,7 @@
         <td>{{ t.email or '—' }}</td>
         <td><a href="/t/{{ t.token }}" target="_blank">view</a></td>
         <td><a href="/admin/tenants/{{ t.name }}/edit">edit</a></td>
+        <td><a href="/t/{{ t.token }}/export.pdf?days=7&brand=0" title="PDF with no Net Sheriff branding, for sharing externally">unbranded PDF</a></td>
         <td>
           <form method="post" action="/admin/tenants/{{ t.name }}/reset"
                 onsubmit="return confirm('Reset password for {{ t.display_name }}?');">

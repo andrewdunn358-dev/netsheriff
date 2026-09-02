@@ -20,6 +20,7 @@
     --seq-100:#ffdccc; --seq-200:#ffb999; --seq-300:#ff8f5c; --seq-400:#ff5e14;
     --seq-500:#d64400; --seq-600:#a33300; --seq-700:#662000;
     --critical:#d03b3b; --good-text:#006300;
+    --card-top:#fbf3ee; --card-bottom:#f9f6f3;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) .viz-root {
@@ -32,6 +33,7 @@
       --seq-100:#6d2403; --seq-200:#953204; --seq-300:#c74205; --seq-400:#f95306;
       --seq-500:#fa7c42; --seq-600:#fb9f74; --seq-700:#fdc1a5;
       --critical:#d03b3b; --good-text:#0ca30c;
+      --card-top:#332016; --card-bottom:#160f0c;
     }
   }
   :root[data-theme="dark"] .viz-root {
@@ -44,6 +46,7 @@
     --seq-100:#6d2403; --seq-200:#953204; --seq-300:#c74205; --seq-400:#f95306;
     --seq-500:#fa7c42; --seq-600:#fb9f74; --seq-700:#fdc1a5;
     --critical:#d03b3b; --good-text:#0ca30c;
+    --card-top:#332016; --card-bottom:#160f0c;
   }
   * { box-sizing: border-box; }
   body.viz-root {
@@ -67,7 +70,7 @@
   .brand b { color:var(--ink-2); font-size:13px; }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
     gap:12px; margin-bottom:16px; }
-  .tile { background:linear-gradient(180deg, var(--surface-1), var(--page));
+  .tile { background:linear-gradient(160deg, var(--card-top), var(--card-bottom));
     border:1px solid var(--ring);
     border-top:3px solid var(--brand-orange);
     border-radius:12px; padding:14px 16px;
@@ -77,7 +80,7 @@
   .tile .val { font-size:32px; font-weight:700; letter-spacing:-.01em; }
   .tile .note { color:var(--ink-3); font-size:12px; margin-top:2px; }
   .tile .flag { color:var(--critical); font-weight:600; font-size:12px; }
-  .card { background:linear-gradient(180deg, var(--surface-1), var(--page));
+  .card { background:linear-gradient(160deg, var(--card-top), var(--card-bottom));
     border:1px solid var(--ring); border-radius:12px; padding:16px 18px 12px; margin-bottom:16px;
     box-shadow:0 2px 8px rgba(0,0,0,0.06); }
   .card-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
@@ -163,7 +166,6 @@
       <div style="margin-top:6px">
         <button class="toggle" id="themeBtn">Dark / light</button>
         <a class="toggle" href="{{ export_url }}">Export PDF</a>
-        <a class="toggle" href="{{ export_url }}{{ '&' if '?' in export_url else '?' }}brand=0" title="PDF without Net Sheriff branding">Export (no branding)</a>
         {% if show_logout %}
         <a class="toggle" href="/logout">Log out</a>
         {% endif %}
