@@ -20,9 +20,16 @@ CREATE TABLE IF NOT EXISTS tenants (
     name TEXT PRIMARY KEY,         -- matches NxCloud operator name
     display_name TEXT NOT NULL,
     token TEXT NOT NULL UNIQUE,    -- unguessable URL token, kept as a fallback link
-    email TEXT,                    -- where the PDF report goes
+    email TEXT,                    -- where the PDF report goes + password reset emails
     username TEXT UNIQUE,          -- client's login username
-    password_hash TEXT             -- werkzeug hash; NULL = login disabled for this tenant
+    password_hash TEXT,            -- werkzeug hash; NULL = login disabled for this tenant
+    reset_token TEXT UNIQUE,       -- set when a password-reset email is requested
+    reset_expiry TEXT              -- ISO timestamp; token invalid after this
+);
+CREATE TABLE IF NOT EXISTS admin_users (
+    username TEXT PRIMARY KEY,     -- staff login, separate from client tenants entirely
+    password_hash TEXT NOT NULL,
+    email TEXT
 );
 """
 
@@ -53,6 +60,66 @@ def verify_login(conn, username, password):
         return row
     return None
 
+
+def list_tenants(conn):
+    return conn.execute("SELECT name, display_name, username, email, token FROM tenants"
+                         " ORDER BY display_name").fetchall()
+
+
+def create_admin(conn, username, password, email=None):
+    """Register a staff admin login — entirely separate table from client tenants."""
+    from werkzeug.security import generate_password_hash
+    conn.execute("INSERT INTO admin_users (username, password_hash, email) VALUES (?,?,?)",
+                 (username, generate_password_hash(password), email))
+    conn.commit()
+
+
+def verify_admin(conn, username, password):
+    from werkzeug.security import check_password_hash
+    row = conn.execute("SELECT * FROM admin_users WHERE username=?", (username,)).fetchone()
+    if row and check_password_hash(row["password_hash"], password):
+        return row
+    return None
+
+
+def set_tenant_password(conn, name, new_password):
+    """Set a tenant's password directly (admin-triggered reset) and clear any
+    outstanding self-service reset token."""
+    from werkzeug.security import generate_password_hash
+    conn.execute("UPDATE tenants SET password_hash=?, reset_token=NULL, reset_expiry=NULL"
+                 " WHERE name=?", (generate_password_hash(new_password), name))
+    conn.commit()
+
+
+def create_reset_token(conn, identifier):
+    """identifier = client's username OR email. Returns the tenant row (with a
+    fresh reset_token set, valid 1 hour) or None if no match — caller decides
+    whether to reveal that distinction (usually: don't, to avoid username
+    enumeration)."""
+    import secrets
+    from datetime import datetime, timedelta
+    row = conn.execute("SELECT * FROM tenants WHERE username=? OR email=?",
+                        (identifier, identifier)).fetchone()
+    if not row:
+        return None
+    token = secrets.token_urlsafe(32)
+    expiry = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+    conn.execute("UPDATE tenants SET reset_token=?, reset_expiry=? WHERE name=?",
+                 (token, expiry, row["name"]))
+    conn.commit()
+    return dict(row, reset_token=token)
+
+
+def get_tenant_by_reset_token(conn, token):
+    """Return the tenant row if the token exists and hasn't expired, else None."""
+    from datetime import datetime
+    row = conn.execute("SELECT * FROM tenants WHERE reset_token=?", (token,)).fetchone()
+    if not row or not row["reset_expiry"]:
+        return None
+    if datetime.utcnow().isoformat() > row["reset_expiry"]:
+        return None
+    return row
+
 # Map raw NxFilter/Jahaslist category names -> client-friendly labels.
 FRIENDLY = {
     "sns": "Social Media", "social-networking": "Social Media", "social": "Social Media",
@@ -78,6 +145,10 @@ def connect(path):
         conn.execute("ALTER TABLE tenants ADD COLUMN username TEXT")
     if "password_hash" not in cols:
         conn.execute("ALTER TABLE tenants ADD COLUMN password_hash TEXT")
+    if "reset_token" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN reset_token TEXT")
+    if "reset_expiry" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN reset_expiry TEXT")
     conn.commit()
     return conn
 

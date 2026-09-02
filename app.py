@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, abort, redirect, render_template, request, session, url_for
 import db as dbmod
+import mailer
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("NXREPORT_SECRET_KEY", secrets.token_hex(32))
@@ -34,6 +35,15 @@ def login_required(view):
     def wrapped(*args, **kwargs):
         if not session.get("tenant"):
             return redirect(url_for("login", next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("admin"):
+            return redirect(url_for("admin_login", next=request.path))
         return view(*args, **kwargs)
     return wrapped
 
@@ -70,6 +80,109 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    message = None
+    if request.method == "POST":
+        conn = get_conn()
+        identifier = request.form.get("identifier", "").strip()
+        t = dbmod.create_reset_token(conn, identifier)
+        # Always show the same message whether or not a match was found —
+        # confirming/denying a match here would let someone probe for which
+        # usernames/emails exist in the system.
+        if t and t.get("email"):
+            link = url_for("reset_password", token=t["reset_token"], _external=True)
+            try:
+                mailer.send_reset_email(t["email"], link, BRAND)
+            except Exception:
+                pass  # still show the generic message below either way
+        message = ("If that username or email matches an account, we've sent "
+                   "a password reset link to the email on file.")
+    return render_template("forgot_password.html", brand=BRAND, message=message)
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    conn = get_conn()
+    t = dbmod.get_tenant_by_reset_token(conn, token)
+    if not t:
+        return render_template("reset_password.html", brand=BRAND, invalid=True)
+    error = None
+    if request.method == "POST":
+        pw1, pw2 = request.form.get("password", ""), request.form.get("password2", "")
+        if len(pw1) < 8:
+            error = "Password must be at least 8 characters."
+        elif pw1 != pw2:
+            error = "Passwords don't match."
+        else:
+            dbmod.set_tenant_password(conn, t["name"], pw1)
+            return redirect(url_for("login"))
+    return render_template("reset_password.html", brand=BRAND, error=error, token=token)
+
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    error = None
+    if request.method == "POST":
+        conn = get_conn()
+        a = dbmod.verify_admin(conn, request.form.get("username", ""),
+                                request.form.get("password", ""))
+        if a:
+            session.clear()
+            session["admin"] = a["username"]
+            return redirect(request.args.get("next") or url_for("admin_dashboard"))
+        error = "Incorrect username or password."
+    return render_template("admin_login.html", brand=BRAND, error=error)
+
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect(url_for("admin_login"))
+
+
+@app.route("/admin/dashboard")
+@admin_required
+def admin_dashboard():
+    conn = get_conn()
+    tenants = dbmod.list_tenants(conn)
+    return render_template("admin_dashboard.html", brand=BRAND, tenants=tenants)
+
+
+@app.route("/admin/tenants/new", methods=["GET", "POST"])
+@admin_required
+def admin_new_tenant():
+    error = None
+    if request.method == "POST":
+        conn = get_conn()
+        name = request.form.get("name", "").strip()
+        display_name = request.form.get("display_name", "").strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        email = request.form.get("email", "").strip() or None
+        if not (name and display_name and username and len(password) >= 8):
+            error = "All fields are required and password must be at least 8 characters."
+        else:
+            try:
+                dbmod.create_tenant(conn, name, display_name, username, password, email)
+                return redirect(url_for("admin_dashboard"))
+            except Exception as e:
+                error = f"Couldn't create tenant — {e}"
+    return render_template("admin_new_tenant.html", brand=BRAND, error=error)
+
+
+@app.route("/admin/tenants/<name>/reset", methods=["POST"])
+@admin_required
+def admin_reset_tenant(name):
+    import secrets
+    conn = get_conn()
+    new_password = secrets.token_urlsafe(9)
+    dbmod.set_tenant_password(conn, name, new_password)
+    tenants = dbmod.list_tenants(conn)
+    return render_template("admin_dashboard.html", brand=BRAND, tenants=tenants,
+                           reset_name=name, reset_password=new_password)
 
 
 @app.route("/dashboard")
