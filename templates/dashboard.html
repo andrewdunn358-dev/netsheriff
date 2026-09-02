@@ -67,20 +67,40 @@
   .brand b { color:var(--ink-2); font-size:13px; }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
     gap:12px; margin-bottom:16px; }
-  .tile { background:var(--surface-1); border:1px solid var(--ring);
+  .tile { background:linear-gradient(180deg, var(--surface-1), var(--page));
+    border:1px solid var(--ring);
     border-top:3px solid var(--brand-orange);
-    border-radius:10px; padding:14px 16px;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+    border-radius:12px; padding:14px 16px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06); }
   .tile .lbl { color:var(--ink-2); font-size:12px; margin-bottom:4px;
     text-transform:uppercase; letter-spacing:.03em; font-weight:600; }
   .tile .val { font-size:32px; font-weight:700; letter-spacing:-.01em; }
   .tile .note { color:var(--ink-3); font-size:12px; margin-top:2px; }
   .tile .flag { color:var(--critical); font-weight:600; font-size:12px; }
-  .card { background:var(--surface-1); border:1px solid var(--ring);
-    border-radius:10px; padding:16px 18px 12px; margin-bottom:16px;
-    box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .card { background:linear-gradient(180deg, var(--surface-1), var(--page));
+    border:1px solid var(--ring); border-radius:12px; padding:16px 18px 12px; margin-bottom:16px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .card-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .card h2 { font-size:15px; margin:0 0 2px; }
   .card .desc { color:var(--ink-2); font-size:12.5px; margin:0 0 12px; }
+  .card-icon { flex:0 0 auto; width:28px; height:28px; border-radius:8px;
+    background:rgba(238,75,0,0.1); color:var(--brand-orange-dark); display:flex;
+    align-items:center; justify-content:center; }
+  .card-icon svg { width:15px; height:15px; }
+  .status-banner { display:flex; align-items:center; gap:14px; padding:14px 18px;
+    border-radius:12px; margin-bottom:16px; border:1px solid var(--ring);
+    box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .status-banner .icon { flex:0 0 auto; width:36px; height:36px; border-radius:9px;
+    display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .status-banner .msg { flex:1 1 auto; }
+  .status-banner .msg b { display:block; font-size:14px; }
+  .status-banner .msg span { color:var(--ink-2); font-size:12px; }
+  .status-banner.ok { background:rgba(0,150,60,0.07); }
+  .status-banner.ok .icon { background:rgba(0,150,60,0.15); color:#0a8a3d; }
+  .status-banner.amber { background:rgba(238,150,0,0.08); }
+  .status-banner.amber .icon { background:rgba(238,150,0,0.18); color:#b56a00; }
+  .status-banner.critical { background:rgba(208,59,59,0.08); }
+  .status-banner.critical .icon { background:rgba(208,59,59,0.18); color:var(--critical); }
   .legend { display:flex; gap:16px; font-size:12px; color:var(--ink-2);
     margin:2px 0 8px; }
   .legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px;
@@ -118,7 +138,8 @@
   @media print {
     .toggle, .no-print, .topbar, .rangebar { display:none; }
     body.viz-root { background:#fff; }
-    .card, .tile { break-inside:avoid; border-color:#ddd; box-shadow:none; }
+    .card, .tile, .status-banner { break-inside:avoid; border-color:#ddd; box-shadow:none;
+      background:#fff !important; }
     header.rpt { border-bottom-color:#ddd; }
   }
 </style>
@@ -165,36 +186,63 @@
   </div>
   {% endif %}
 
+  <div id="statusBanner"></div>
+
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h2>Where the office's browsing went</h2>
-    <p class="desc">DNS requests by category across all staff (ads &amp; background trackers excluded).</p>
+    <div class="card-hd">
+      <div>
+        <h2>Where the office's browsing went</h2>
+        <p class="desc">DNS requests by category across all staff (ads &amp; background trackers excluded).</p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div>
+    </div>
     <div id="catChart"></div>
   </div>
 
   <div class="card">
-    <h2>Social media &amp; leisure browsing, by person</h2>
-    <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar for the working-day average.</span></p>
+    <div class="card-hd">
+      <div>
+        <h2>Social media &amp; leisure browsing, by person</h2>
+        <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar for the working-day average.</span></p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    </div>
     <div id="userChart"></div>
   </div>
 
   <div class="card">
-    <h2 id="heatTitle">Daily pattern</h2>
-    <p class="desc" id="heatDesc"></p>
+    <div class="card-hd">
+      <div>
+        <h2 id="heatTitle">Daily pattern</h2>
+        <p class="desc" id="heatDesc"></p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+    </div>
     <div id="heatChart"></div>
   </div>
 
   <div class="card">
-    <h2>Day-by-day trend</h2>
-    <p class="desc">All browsing vs. social &amp; leisure browsing, whole office.</p>
+    <div class="card-hd">
+      <div>
+        <h2>Day-by-day trend</h2>
+        <p class="desc">All browsing vs. social &amp; leisure browsing, whole office.</p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div>
+    </div>
     <div class="legend" id="trendLegend"></div>
     <div id="trendChart"></div>
   </div>
 
   <div class="card">
-    <h2>Most visited sites</h2>
-    <p class="desc">Top destinations across the office for the period.</p>
+    <div class="card-hd">
+      <div>
+        <h2>Most visited sites</h2>
+        <p class="desc">Top destinations across the office for the period.</p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
+    </div>
     <table class="doms" id="domTable">
       <thead><tr><th>Site</th><th>Category</th><th style="text-align:right">Requests</th></tr></thead>
       <tbody></tbody>
@@ -261,6 +309,31 @@
     }
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+  // Worst signal wins: blocked attempts > high social/leisure share > all quiet.
+  function statusBanner() {
+    const host = document.getElementById('statusBanner');
+    const k = D.kpis;
+    let level, icon, title, sub;
+    if (k.blocked > 0) {
+      level = 'critical'; icon = '&#9888;';
+      title = 'Blocked attempts detected';
+      sub = fmt(k.blocked) + ' request' + (k.blocked === 1 ? '' : 's') +
+        ' hit malware/phishing or off-policy sites this period.';
+    } else if (k.distraction_pct >= 25) {
+      level = 'amber'; icon = '&#9888;';
+      title = 'Social & leisure browsing is elevated';
+      sub = k.distraction_pct + '% of all requests this period' +
+        (D.flagged_user ? ', led by ' + cap(D.flagged_user) : '') + '.';
+    } else {
+      level = 'ok'; icon = '&#10003;';
+      title = 'All quiet';
+      sub = 'Normal browsing patterns — nothing flagged this period.';
+    }
+    host.innerHTML = '<div class="status-banner ' + level + '">' +
+      '<div class="icon">' + icon + '</div>' +
+      '<div class="msg"><b>' + title + '</b><span>' + sub + '</span></div></div>';
+  }
 
   // ---- horizontal bar helper (thin marks, 4px rounded data-end, 2px gaps) ---
   function hbars(host, rows, opts) {
@@ -422,7 +495,7 @@
     }
   }
 
-  function render() { kpis(); catChart(); userChart(); heatChart();
+  function render() { statusBanner(); kpis(); catChart(); userChart(); heatChart();
     trendChart(); domTable(); }
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);
