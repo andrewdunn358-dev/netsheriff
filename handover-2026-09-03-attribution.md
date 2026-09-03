@@ -214,3 +214,52 @@ Knowing that lets us trace the exact path ourselves.
 NCS is live, filtering correctly, monitor-only per client instruction, with
 per-machine reporting now working. The only gap is putting names to machines,
 and that's a build we own rather than a vendor dependency.
+
+---
+
+## UPDATE — attribution built and working end to end
+
+Built and deployed the same evening. Working per-person reporting confirmed
+against live NCS data.
+
+**What was added** (commits `bd80460`, `8dd956e`):
+
+- `ip_user_map` table — timestamped intervals, not a single current value.
+- `db.record_ip_users()` / `db.user_for_ip_at()`.
+- `POST /api/ip-users`, authenticated by `X-Agent-Token` against
+  `NXREPORT_AGENT_TOKEN` (503 if unset, so it can't run open).
+- `agent/report-sessions.ps1` — Tactical RMM script for the client DC.
+  Regex validated against real `net session` output; machine accounts (`$`),
+  `MSOL_`, `HealthMailbox` and named service accounts filtered out.
+- **Timezone fix in `collector.py`**: NxCloud exports UTC, host runs
+  Europe/London. `to_local()` converts via the OS (not a fixed offset, so DST
+  is handled). This was also silently breaking the attribution join.
+
+**Verified live**: 6 users mapped (ThomasLeonard, Julie, Scott, Lorraine,
+energy, Glen) and joined against real DNS activity with correct local
+timestamps. Historic rows (id <= 2188) shifted +1 hour to match.
+
+### OUTSTANDING — must fix before a second client
+
+**The agent token is global.** One `NXREPORT_AGENT_TOKEN` for all tenants
+means any site's agent could post mappings for any other tenant. Needs to be
+a per-tenant token stored on the tenant record and checked against the posted
+tenant name. Not urgent with one client; blocking for two.
+
+### Also still outstanding
+
+- Dashboard/PDF don't yet use the mapping — reports still show IPs. The join
+  is proven (see above), it just needs wiring into `db.py` aggregations and
+  the templates.
+- Tactical scheduled task needs creating on NCSServer (every 1-2 min) with
+  `NS_PORTAL_URL`, `NS_TENANT`, `NS_AGENT_TOKEN` set in the task.
+- Rotate the GitHub PAT and the agent token — both were pasted in chat.
+- DC's own DNS still `192.168.0.3, 127.0.0.1` (leftover test config).
+- `use_radius = 1` / `testing123` still live on the client DC, unused.
+
+### Honest limitation to state to the client
+
+This attributes activity to a **machine's logged-in user**, not an
+authenticated identity. One desk is effectively one person, which answers
+NCS's question, but shared machines and `Switch User` would misattribute.
+Say so plainly in any report that feeds an HR conversation.
