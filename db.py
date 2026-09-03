@@ -264,7 +264,14 @@ def dashboard_data(conn, tenant, start, end):
         if friendly(r["category"]) in DISTRACTION:
             per_user_distr[r["user"]] += r["n"]
     users_sorted = sorted(per_user_all, key=lambda u: -per_user_distr.get(u, 0))
-    flagged = users_sorted[0] if users_sorted else None
+    # Only flag someone if they've genuinely got distraction activity - without
+    # this check, the top user by distraction count still "wins" even with
+    # zero such requests, making the dashboard look like it's flagging normal
+    # (or in this case, test) traffic as a concern when nothing's actually
+    # happened. The template already has a clean '-' fallback for
+    # flagged_user=None; this just makes sure that path actually gets used.
+    flagged = (users_sorted[0] if users_sorted and per_user_distr.get(users_sorted[0], 0) > 0
+               else None)
     per_user = [{"user": u, "total": per_user_all[u],
                  "distraction": per_user_distr.get(u, 0)} for u in users_sorted]
 
