@@ -56,7 +56,12 @@ def parse_line(line):
                 j.get("User", "unknown"), domain,
                 resolve_category(domain, j.get("Category")),
                 1 if str(j.get("Blocked", "N")).upper() in ("Y", "TRUE", "1") else 0,
-                j.get("ClientIp", ""), j.get("Policy", ""), j.get("Reason", ""))
+                # LocalIp is the real private IP of the machine behind NxRelay.
+                # ClientIp is the site's public IP, identical for every device on
+                # the site, so it can't distinguish machines. Prefer LocalIp and
+                # fall back to ClientIp for sites with no relay.
+                j.get("LocalIp") or j.get("ClientIp", ""),
+                j.get("Policy", ""), j.get("Reason", ""))
     return None
 
 
