@@ -1,0 +1,13 @@
+bbc.co.uk
+bbc.com
+dailymail.co.uk
+ft.com
+independent.co.uk
+itv.com
+mirror.co.uk
+reuters.com
+skynews.com
+standard.co.uk
+telegraph.co.uk
+theguardian.com
+thesun.co.uk
