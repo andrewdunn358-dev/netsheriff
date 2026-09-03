@@ -12,11 +12,32 @@ Run:  python3 collector.py --db nxreport.db --port 5140
 Then point NxFilter/NxCloud syslog at this host:5140 (UDP).
 """
 import argparse, json, re, signal, socketserver, sys, threading, time
+from datetime import datetime, timezone
 import db as dbmod
 import categorizer
 
 PIPE_RE = re.compile(r"NXFILTER\|")
 CATEGORY_LOOKUP = categorizer.load("categories.json")
+
+
+def to_local(ts):
+    """NxCloud stamps its syslog export in UTC while the host runs local time
+    (Europe/London). Left alone, every row lands an hour adrift under BST,
+    which breaks dashboards, date ranges and any join against locally
+    timestamped data. Convert on the way in so the DB is consistently local.
+
+    Handles the DST boundary correctly because it asks the OS each time
+    rather than applying a fixed offset. Anything unparseable is passed
+    through untouched rather than dropped.
+    """
+    try:
+        naive = datetime.strptime(ts.strip(), "%Y-%m-%d %H:%M:%S")
+    except (ValueError, AttributeError):
+        return ts
+    return (naive.replace(tzinfo=timezone.utc)
+            .astimezone()
+            .strftime("%Y-%m-%d %H:%M:%S"))
+
 if not CATEGORY_LOOKUP:
     print("WARNING: categories.json not found or empty — falling back entirely "
           "to NxFilter's own categorization (limited to Ads/Phishing/Porn on "
@@ -42,7 +63,7 @@ def parse_line(line):
         if len(parts) >= 9:
             _, ts, blocked, domain, user, cip, policy, cat, reason = parts[:9]
             tenant = parts[10] if len(parts) > 10 else "default"
-            return (ts, tenant.strip() or "default", user or "unknown", domain,
+            return (to_local(ts), tenant.strip() or "default", user or "unknown", domain,
                     resolve_category(domain, cat), 1 if blocked.strip().upper() == "Y" else 0,
                     cip, policy, reason)
     # JSON format
@@ -52,7 +73,7 @@ def parse_line(line):
         j = None
     if j and "Domain" in j:
         domain = j.get("Domain", "")
-        return (j.get("Time", ""), j.get("Group") or j.get("Operator") or "default",
+        return (to_local(j.get("Time", "")), j.get("Group") or j.get("Operator") or "default",
                 j.get("User", "unknown"), domain,
                 resolve_category(domain, j.get("Category")),
                 1 if str(j.get("Blocked", "N")).upper() in ("Y", "TRUE", "1") else 0,
