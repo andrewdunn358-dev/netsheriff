@@ -261,7 +261,7 @@
 <script>window.DATA = {{ data | tojson }};</script>
 <script>
 (function () {
-  const D = window.DATA, css = getComputedStyle(document.body);
+  let D = window.DATA, css = getComputedStyle(document.body);
   const C = n => css.getPropertyValue(n).trim();
   const fmt = n => n.toLocaleString('en-GB');
   const NS = 'http://www.w3.org/2000/svg';
@@ -501,6 +501,37 @@
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);
     window.__rz = setTimeout(render, 150); });
+
+  // Auto-refresh: re-fetch the same data this page already has (same date
+  // range, from the URL) every few minutes and redraw in place - no full
+  // page reload, no lost scroll position. Paused while the tab isn't
+  // visible, so it's not pointlessly hitting the server when nobody's
+  // looking at it.
+  const REFRESH_MS = 3 * 60 * 1000;
+  let refreshTimer = null;
+  async function refreshData() {
+    try {
+      const res = await fetch('/dashboard/data.json' + window.location.search,
+                               { credentials: 'same-origin' });
+      if (!res.ok) return;  // e.g. session expired - just skip this cycle
+      D = await res.json();
+      render();
+    } catch (e) {
+      // Network hiccup - fine, just try again next interval.
+    }
+  }
+  function startAutoRefresh() {
+    if (!refreshTimer) refreshTimer = setInterval(refreshData, REFRESH_MS);
+  }
+  function stopAutoRefresh() {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopAutoRefresh();
+    else { refreshData(); startAutoRefresh(); }  // catch up immediately on return
+  });
+  if (!document.hidden) startAutoRefresh();
 })();
 </script>
 </body>

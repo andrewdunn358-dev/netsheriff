@@ -14,7 +14,7 @@ Run:  python3 app.py --db nxreport.db --port 8080
 import argparse, os, secrets
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, abort, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, send_file, session, url_for
 import db as dbmod
 import mailer
 import report as reportmod
@@ -365,6 +365,21 @@ def dashboard():
     start, end = resolve_range(conn, t["name"], request.args)
     export_url = url_for("dashboard_export", start=start, end=end)
     return render_dashboard(conn, t, start, end, show_logout=True, export_url=export_url)
+
+
+@app.route("/dashboard/data.json")
+@login_required
+def dashboard_data_json():
+    """Same data the main /dashboard route renders, as plain JSON - lets the
+    page auto-refresh in place (re-fetch + redraw) rather than needing a full
+    page reload every few minutes."""
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (session["tenant"],)).fetchone()
+    if not t:
+        return jsonify({"error": "not logged in"}), 401
+    start, end = resolve_range(conn, t["name"], request.args)
+    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end))
+    return jsonify(data)
 
 
 @app.route("/dashboard/export.pdf")
