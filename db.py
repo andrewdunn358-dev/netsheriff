@@ -292,13 +292,38 @@ def insert_rows(conn, rows):
     conn.commit()
 
 
+# How long after a mapping was last confirmed we still trust it. The site
+# agent polls every few minutes, so a request can legitimately land just after
+# the last observation but before the next one. Too small and traffic falls
+# through to a bare IP; too large and a machine handed to another user could
+# briefly misattribute. 15 minutes suits a 5-minute poll.
+MAP_GRACE_MINUTES = 15
+
+# Resolves each dns_log row to a person where we can. Order matters:
+#   1. the username mapped to that private IP at that moment (real name)
+#   2. the private IP itself (a device we know about but nobody was logged in,
+#      e.g. a handset or a machine that was off when the agent last polled)
+#   3. NxCloud's own user field, which is the bare operator name
+# Written as a correlated subquery so it can be dropped into any existing
+# aggregate without restructuring the queries around it.
+IDENTITY = f"""COALESCE(
+    (SELECT m.username FROM ip_user_map m
+      WHERE m.tenant = dns_log.tenant
+        AND m.ip = dns_log.client_ip
+        AND m.first_seen <= dns_log.ts
+        AND datetime(m.last_seen, '+{MAP_GRACE_MINUTES} minutes') >= dns_log.ts
+      ORDER BY m.first_seen DESC LIMIT 1),
+    dns_log.client_ip,
+    dns_log.user)"""
+
+
 def dashboard_data(conn, tenant, start, end):
     """All aggregates the dashboard/report needs, one dict, JSON-serialisable."""
     q = lambda sql, *a: conn.execute(sql, (tenant, start, end, *a)).fetchall()
     base = "FROM dns_log WHERE tenant=? AND ts>=? AND ts<?"
 
     total, users, blocked = conn.execute(
-        f"SELECT COUNT(*), COUNT(DISTINCT user), SUM(blocked) {base}",
+        f"SELECT COUNT(*), COUNT(DISTINCT {IDENTITY}), SUM(blocked) {base}",
         (tenant, start, end)).fetchone()
     total, blocked = total or 0, blocked or 0
 
@@ -314,12 +339,13 @@ def dashboard_data(conn, tenant, start, end):
         cat_share = head + [("Other", sum(n for _, n in tail))]
 
     # distraction requests per user
-    user_rows = q(f"SELECT user, category, COUNT(*) n {base} GROUP BY user, category")
+    user_rows = q(f"SELECT {IDENTITY} AS person, category, COUNT(*) n {base}"
+                  f" GROUP BY person, category")
     per_user_all, per_user_distr = defaultdict(int), defaultdict(int)
     for r in user_rows:
-        per_user_all[r["user"]] += r["n"]
+        per_user_all[r["person"]] += r["n"]
         if friendly(r["category"]) in DISTRACTION:
-            per_user_distr[r["user"]] += r["n"]
+            per_user_distr[r["person"]] += r["n"]
     users_sorted = sorted(per_user_all, key=lambda u: -per_user_distr.get(u, 0))
     # Only flag someone if they've genuinely got distraction activity - without
     # this check, the top user by distraction count still "wins" even with
@@ -336,7 +362,7 @@ def dashboard_data(conn, tenant, start, end):
     heat = {}
     if flagged:
         rows = q(f"SELECT substr(ts,1,10) d, CAST(substr(ts,12,2) AS INT) h,"
-                 f" category, COUNT(*) n {base} AND user=? GROUP BY d,h,category", flagged)
+                 f" category, COUNT(*) n {base} AND {IDENTITY}=? GROUP BY d,h,category", flagged)
         hm = defaultdict(lambda: [0] * 24)
         for r in rows:
             if friendly(r["category"]) in DISTRACTION:
