@@ -18,7 +18,30 @@ pip3 install --break-system-packages -r requirements.txt gunicorn
 cd /opt/netsheriff && echo "NXREPORT_SECRET_KEY=$(openssl rand -hex 32)" > .env
 ```
 
-## 3. Install the systemd units
+## 3. Build the domain categorization lookup
+
+NxFilter's free tier ('Globlist') only auto-classifies 3 categories
+(Ads, Phishing/Malware, Porn) — everything else (social media, shopping,
+streaming, etc.) would otherwise show up uncategorized. This builds our
+own lookup from open-source lists, independent of NxFilter's paid
+categorization services:
+
+```bash
+cd /opt/netsheriff && python3 build_categories.py --out categories.json
+```
+
+Takes a minute or two (downloads a few open-source blocklists). Re-run
+this periodically to pick up upstream updates — the systemd timer below
+does this weekly automatically:
+
+```bash
+cp /opt/netsheriff/systemd/nxreport-categories.service /etc/systemd/system/
+cp /opt/netsheriff/systemd/nxreport-categories.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now nxreport-categories.timer
+```
+
+## 4. Install the systemd units
 
 ```bash
 cp /opt/netsheriff/systemd/nxreport-collector.service /etc/systemd/system/
@@ -27,7 +50,7 @@ systemctl daemon-reload
 systemctl enable --now nxreport-collector nxreport-dashboard
 ```
 
-## 4. Check both are running
+## 5. Check both are running
 
 ```bash
 systemctl status nxreport-collector nxreport-dashboard --no-pager

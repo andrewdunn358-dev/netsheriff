@@ -1,0 +1,7 @@
+[Unit]
+Description=Rebuild NxReport's domain categorization lookup
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/netsheriff
+ExecStart=/usr/bin/python3 /opt/netsheriff/build_categories.py --out /opt/netsheriff/categories.json

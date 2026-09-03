@@ -13,8 +13,24 @@ Then point NxFilter/NxCloud syslog at this host:5140 (UDP).
 """
 import argparse, json, re, socketserver, sys
 import db as dbmod
+import categorizer
 
 PIPE_RE = re.compile(r"NXFILTER\|")
+CATEGORY_LOOKUP = categorizer.load("categories.json")
+if not CATEGORY_LOOKUP:
+    print("WARNING: categories.json not found or empty — falling back entirely "
+          "to NxFilter's own categorization (limited to Ads/Phishing/Porn on "
+          "the free Globlist tier). Run build_categories.py to fix this.",
+          file=sys.stderr)
+
+
+def resolve_category(domain, nxfilter_category):
+    """Our own lookup takes priority (it's what gives us Social Media,
+    Shopping, Search, News, Business & Work — categories the free NxFilter
+    tier doesn't classify at all). Falls back to whatever NxFilter itself
+    provided (Ads/Phishing/Malware/Porn come from there), then 'unknown'."""
+    return (categorizer.categorize(domain, CATEGORY_LOOKUP)
+            or nxfilter_category or "unknown")
 
 
 def parse_line(line):
@@ -27,7 +43,7 @@ def parse_line(line):
             _, ts, blocked, domain, user, cip, policy, cat, reason = parts[:9]
             tenant = parts[10] if len(parts) > 10 else "default"
             return (ts, tenant.strip() or "default", user or "unknown", domain,
-                    cat or "unknown", 1 if blocked.strip().upper() == "Y" else 0,
+                    resolve_category(domain, cat), 1 if blocked.strip().upper() == "Y" else 0,
                     cip, policy, reason)
     # JSON format
     try:
@@ -35,9 +51,10 @@ def parse_line(line):
     except (ValueError, json.JSONDecodeError):
         j = None
     if j and "Domain" in j:
+        domain = j.get("Domain", "")
         return (j.get("Time", ""), j.get("Group") or j.get("Operator") or "default",
-                j.get("User", "unknown"), j.get("Domain", ""),
-                j.get("Category", "unknown"),
+                j.get("User", "unknown"), domain,
+                resolve_category(domain, j.get("Category")),
                 1 if str(j.get("Blocked", "N")).upper() in ("Y", "TRUE", "1") else 0,
                 j.get("ClientIp", ""), j.get("Policy", ""), j.get("Reason", ""))
     return None

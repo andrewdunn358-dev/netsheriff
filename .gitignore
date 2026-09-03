@@ -7,3 +7,4 @@ sample_report.pdf
 shot_*.png
 pdfcheck*.png
 .env
+categories.json
