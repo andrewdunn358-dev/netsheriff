@@ -26,6 +26,15 @@ CREATE TABLE IF NOT EXISTS tenants (
     reset_token TEXT UNIQUE,       -- set when a password-reset email is requested
     reset_expiry TEXT              -- ISO timestamp; token invalid after this
 );
+CREATE TABLE IF NOT EXISTS ip_user_map (
+    id INTEGER PRIMARY KEY,
+    tenant TEXT NOT NULL,          -- NxCloud operator name, matches dns_log.tenant
+    ip TEXT NOT NULL,              -- private IP as seen in dns_log.client_ip
+    username TEXT NOT NULL,        -- AD login name reported by the site agent
+    first_seen TEXT NOT NULL,      -- 'YYYY-MM-DD HH:MM:SS'
+    last_seen TEXT NOT NULL        -- extended while the same user holds the IP
+);
+CREATE INDEX IF NOT EXISTS idx_map_lookup ON ip_user_map(tenant, ip, first_seen, last_seen);
 CREATE TABLE IF NOT EXISTS admin_users (
     username TEXT PRIMARY KEY,     -- staff login, separate from client tenants entirely
     password_hash TEXT NOT NULL,
@@ -222,6 +231,54 @@ def connect(path, check_same_thread=True):
         conn.execute("ALTER TABLE admin_users ADD COLUMN reset_expiry TEXT")
     conn.commit()
     return conn
+
+
+def record_ip_users(conn, tenant, pairs, seen_at=None, gap_seconds=600):
+    """Record observed (ip, username) pairs from a site agent.
+
+    Stored as time intervals rather than a single current value, so a report
+    for last Tuesday attributes to whoever held that IP last Tuesday. This is
+    what makes the whole thing safe under DHCP churn — no reservations needed.
+
+    If the same user still holds the same IP and we saw them within
+    gap_seconds, the open interval is extended. Otherwise a new interval
+    starts, which is what happens when a lease moves to someone else.
+
+    Returns (extended, created) counts.
+    """
+    from datetime import datetime, timedelta
+    now = seen_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    cutoff = (datetime.strptime(now, "%Y-%m-%d %H:%M:%S")
+              - timedelta(seconds=gap_seconds)).strftime("%Y-%m-%d %H:%M:%S")
+    extended = created = 0
+    for ip, username in pairs:
+        ip = (ip or "").strip()
+        username = (username or "").strip()
+        if not ip or not username:
+            continue
+        row = conn.execute(
+            "SELECT id FROM ip_user_map WHERE tenant=? AND ip=? AND username=?"
+            " AND last_seen >= ? ORDER BY last_seen DESC LIMIT 1",
+            (tenant, ip, username, cutoff)).fetchone()
+        if row:
+            conn.execute("UPDATE ip_user_map SET last_seen=? WHERE id=?", (now, row["id"]))
+            extended += 1
+        else:
+            conn.execute(
+                "INSERT INTO ip_user_map (tenant, ip, username, first_seen, last_seen)"
+                " VALUES (?,?,?,?,?)", (tenant, ip, username, now, now))
+            created += 1
+    conn.commit()
+    return extended, created
+
+
+def user_for_ip_at(conn, tenant, ip, ts):
+    """Who held this IP at this moment? None if unknown."""
+    row = conn.execute(
+        "SELECT username FROM ip_user_map WHERE tenant=? AND ip=?"
+        " AND first_seen <= ? AND last_seen >= ?"
+        " ORDER BY first_seen DESC LIMIT 1", (tenant, ip, ts, ts)).fetchone()
+    return row["username"] if row else None
 
 
 def friendly(cat):

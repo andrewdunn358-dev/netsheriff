@@ -354,6 +354,43 @@ def admin_change_password():
     return render_template("admin_change_password.html", brand=BRAND, error=error, success=success)
 
 
+@app.route("/api/ip-users", methods=["POST"])
+def api_ip_users():
+    """Ingest IP-to-username observations from a site agent.
+
+    Authenticated by a shared token in the X-Agent-Token header, checked
+    against NXREPORT_AGENT_TOKEN. This is machine-to-machine, so it uses a
+    token rather than a session — but it must never be left unset, or anyone
+    could poison attribution data.
+
+    Expected body:
+        {"tenant": "NCS", "sessions": [{"ip": "192.168.0.34",
+                                        "username": "ThomasLeonard"}, ...]}
+    """
+    expected = os.environ.get("NXREPORT_AGENT_TOKEN", "")
+    if not expected:
+        return jsonify(error="agent ingest not configured"), 503
+    if not secrets.compare_digest(request.headers.get("X-Agent-Token", ""), expected):
+        return jsonify(error="unauthorised"), 401
+
+    payload = request.get_json(silent=True) or {}
+    tenant = (payload.get("tenant") or "").strip()
+    sessions = payload.get("sessions")
+    if not tenant or not isinstance(sessions, list):
+        return jsonify(error="tenant and sessions[] required"), 400
+
+    conn = get_conn()
+    try:
+        if not conn.execute("SELECT 1 FROM tenants WHERE name=?", (tenant,)).fetchone():
+            return jsonify(error="unknown tenant"), 404
+        pairs = [(s.get("ip"), s.get("username")) for s in sessions
+                 if isinstance(s, dict)]
+        extended, created = dbmod.record_ip_users(conn, tenant, pairs)
+    finally:
+        conn.close()
+    return jsonify(ok=True, received=len(sessions), extended=extended, created=created)
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():
