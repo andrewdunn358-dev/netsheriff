@@ -200,8 +200,8 @@ FRIENDLY = {
 DISTRACTION = {"Social Media", "Video & Streaming", "Games", "Shopping", "Sports"}
 
 
-def connect(path):
-    conn = sqlite3.connect(path)
+def connect(path, check_same_thread=True):
+    conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
     # Migrate DBs created before login existed (CREATE TABLE IF NOT EXISTS

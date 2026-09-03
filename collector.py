@@ -11,7 +11,7 @@ OPERATOR (= tenant/client) name, which is what makes multi-client reporting work
 Run:  python3 collector.py --db nxreport.db --port 5140
 Then point NxFilter/NxCloud syslog at this host:5140 (UDP).
 """
-import argparse, json, re, socketserver, sys
+import argparse, json, re, signal, socketserver, sys, threading, time
 import db as dbmod
 import categorizer
 
@@ -65,28 +65,65 @@ def main():
     ap.add_argument("--db", default="nxreport.db")
     ap.add_argument("--port", type=int, default=5140)
     ap.add_argument("--batch", type=int, default=200)
+    ap.add_argument("--flush-interval", type=float, default=5.0,
+                     help="Max seconds a row can sit unflushed, regardless of "
+                          "batch size. Low-traffic sites (a handful of "
+                          "requests a minute) would otherwise wait a very "
+                          "long time to ever reach --batch, since the old "
+                          "code only flushed at exactly that count.")
     args = ap.parse_args()
-    conn = dbmod.connect(args.db)
+    conn = dbmod.connect(args.db, check_same_thread=False)
     buf = []
+    buf_lock = threading.Lock()
+
+    def flush():
+        with buf_lock:
+            if buf:
+                dbmod.insert_rows(conn, buf)
+                buf.clear()
 
     class Handler(socketserver.BaseRequestHandler):
         def handle(self):
             data = self.request[0].decode("utf-8", "replace")
-            for line in data.splitlines():
-                row = parse_line(line)
-                if row:
-                    buf.append(row)
-            if len(buf) >= args.batch:
-                dbmod.insert_rows(conn, buf)
-                buf.clear()
+            rows = [r for r in (parse_line(l) for l in data.splitlines()) if r]
+            if not rows:
+                return
+            with buf_lock:
+                buf.extend(rows)
+                hit_batch = len(buf) >= args.batch
+            if hit_batch:
+                flush()
 
-    print(f"nxreport collector listening on UDP :{args.port} -> {args.db}", file=sys.stderr)
+    stop_event = threading.Event()
+
+    def flush_timer():
+        while not stop_event.wait(args.flush_interval):
+            flush()
+
+    # systemctl restart/stop sends SIGTERM, not the Ctrl+C SIGINT that
+    # KeyboardInterrupt catches — without this, every restart silently
+    # discarded whatever rows hadn't hit --batch yet.
+    def handle_sigterm(signum, frame):
+        stop_event.set()
+        flush()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+
+    timer_thread = threading.Thread(target=flush_timer, daemon=True)
+    timer_thread.start()
+
+    print(f"nxreport collector listening on UDP :{args.port} -> {args.db} "
+          f"(flushing every {args.flush_interval}s or every {args.batch} rows)",
+          file=sys.stderr)
     with socketserver.UDPServer(("0.0.0.0", args.port), Handler) as srv:
         try:
             srv.serve_forever()
         except KeyboardInterrupt:
-            if buf:
-                dbmod.insert_rows(conn, buf)
+            pass
+        finally:
+            stop_event.set()
+            flush()
 
 
 if __name__ == "__main__":
