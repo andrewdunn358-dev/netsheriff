@@ -25,9 +25,18 @@ Categories map to the exact lowercase codes db.py's FRIENDLY dict already
 understands (sns, streaming, gambling, shopping, search, business, news) —
 no changes needed to the dashboard/report display layer.
 """
-import argparse, json, urllib.request
+import argparse, json, re, urllib.request
 
 BLP_BASE = "https://raw.githubusercontent.com/blocklistproject/Lists/master"
+VALID_DOMAIN_RE = re.compile(r"^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}$")
+
+
+def is_valid_domain(d):
+    """NxFilter (and DNS generally) rejects hostnames with underscores or
+    other non-standard characters — a handful of these show up in upstream
+    lists (e.g. some TikTok SDK domains use 'client_monitor.isnssdk.com').
+    Filter them out here so a bad entry never breaks a bulk import."""
+    return bool(VALID_DOMAIN_RE.match(d))
 BLP_LISTS = {
     "facebook.txt": "sns",
     "twitter.txt": "sns",
@@ -90,7 +99,9 @@ def fetch_blp_list(name):
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("0.0.0.0 "):
-            domains.append(line.split(None, 1)[1].strip())
+            d = line.split(None, 1)[1].strip()
+            if is_valid_domain(d):
+                domains.append(d)
     return domains
 
 
@@ -109,6 +120,7 @@ def main():
             with open(os.path.join(args.offline_dir, fname)) as f:
                 domains = [l.split(None, 1)[1].strip() for l in f
                           if l.strip().startswith("0.0.0.0 ")]
+            domains = [d for d in domains if is_valid_domain(d)]
         else:
             domains = fetch_blp_list(fname)
         for d in domains:
