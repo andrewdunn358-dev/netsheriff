@@ -100,6 +100,13 @@
     </div>
 
     <div class="card">
+      <h2>Roll out to a whole site (Tactical RMM)</h2>
+      <p class="desc">For deploying to every machine at once. Paste this into Tactical &rarr; Script Manager as a PowerShell script, then run it against the client's site (or set it as a policy). Tactical runs it on each machine as it checks in &mdash; including PCs that are currently off, whenever they next come on. The token is built in, so nothing is fetched over the network and there's no link to expire.</p>
+      <div class="cmd" id="cmd-fleet" style="max-height:220px;overflow:auto">{{ full_install_script }}<button class="copy" data-t="cmd-fleet">Copy</button></div>
+      <p class="hint">One-time per machine. The sampling itself then runs every minute as whoever is logged in. Nothing is recorded until you turn monitoring on for this client, and nothing shows on their portal until then.</p>
+    </div>
+
+    <div class="card">
       <h2>The scripts</h2>
       <p class="desc">Served from this server with the client's token built in. Links expire after 2 hours.</p>
       <p style="margin:0 0 6px"><a class="dl" href="{{ inst_url }}" target="_blank">install-activity-task.ps1</a></p>

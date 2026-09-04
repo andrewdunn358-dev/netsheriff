@@ -373,9 +373,36 @@ def admin_deploy_tenant(name):
 
     install_cmd = one_liner(inst_url, "ns-install.ps1")
     uninstall_cmd = one_liner(uninst_url, "ns-uninstall.ps1")
+
+    # Full install script with this client's token and portal baked in, for
+    # pasting into Tactical's Script Manager. Unlike the one-liner above (which
+    # fetches via a 2-hour signed link - fine for a single machine, useless for
+    # a fleet rollout that runs over days as machines check in), this carries
+    # everything inline. Tactical stores it and runs it on each agent at
+    # check-in, including machines currently off, whenever they next come on.
+    # The token never travels over an unauthenticated HTTP request this way.
+    def _script_with_token(fname):
+        path = os.path.join(os.path.dirname(__file__), "agent", fname)
+        try:
+            body = open(path, encoding="ascii").read()
+        except OSError:
+            return ""
+        return (body
+                .replace('[string]$PortalUrl  = "https://portal.netsheriff.co.uk"',
+                         '[string]$PortalUrl  = "{}"'.format(portal))
+                .replace('[string]$Tenant     = "NCS"',
+                         '[string]$Tenant     = "{}"'.format(name))
+                .replace('[string]$AgentToken = "CHANGE-ME"',
+                         '[string]$AgentToken = "{}"'.format(token)))
+
+    full_install_script = _script_with_token("install-activity-task.ps1")
+    full_uninstall_script = _script_with_token("uninstall-activity-task.ps1")
+
     return render_template("admin_deploy.html", brand=BRAND, t=t, token=token,
                            portal=portal, inst_url=inst_url, uninst_url=uninst_url,
-                           install_cmd=install_cmd, uninstall_cmd=uninstall_cmd)
+                           install_cmd=install_cmd, uninstall_cmd=uninstall_cmd,
+                           full_install_script=full_install_script,
+                           full_uninstall_script=full_uninstall_script)
 
 
 @app.route("/admin/tenants/<name>/reset", methods=["POST"])
