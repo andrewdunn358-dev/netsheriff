@@ -457,7 +457,7 @@ IDENTITY = f"""COALESCE(
     dns_log.user)"""
 
 
-def dashboard_data(conn, tenant, start, end):
+def dashboard_data(conn, tenant, start, end, include_screen_time=False):
     """All aggregates the dashboard/report needs, one dict, JSON-serialisable."""
     q = lambda sql, *a: conn.execute(sql, (tenant, start, end, *a)).fetchall()
     base = "FROM dns_log WHERE tenant=? AND ts>=? AND ts<?"
@@ -629,4 +629,10 @@ def dashboard_data(conn, tenant, start, end):
                          "distraction": unattributed_distr},
         "heatmap": heat, "daily": daily, "top_domains": top_domains,
         "flagged_detail": flagged_detail,
+        # Screen time is present only when the caller asks for it, which the
+        # caller only does when the tenant's flag is on. When off, the key is
+        # absent entirely — the template renders nothing, so the feature
+        # simply doesn't exist on that client's portal.
+        **({"screen_time": screen_time(conn, tenant, start, end)}
+           if include_screen_time else {}),
     }

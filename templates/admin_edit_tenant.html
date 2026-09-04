@@ -56,6 +56,11 @@
     background:rgba(208,59,59,0.1); color:var(--critical); font-size:13px;
     padding:8px 10px; border-radius:8px; margin-bottom:16px;
   }
+  .toggle-block {
+    border:1px solid var(--grid); border-radius:8px; padding:14px;
+    margin:6px 0 16px; background:var(--page);
+  }
+  .toggle-row { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
 </style>
 </head>
 <body class="viz-root">
@@ -81,6 +86,26 @@
         <label for="email">Contact email</label>
         <input id="email" name="email" type="email" value="{{ t.email or '' }}" required>
         <p class="hint">Used for password-reset links and the weekly PDF report.</p>
+
+        <div class="toggle-block">
+          <div class="toggle-row">
+            <div>
+              <label for="screen_monitoring" style="margin:0">Screen-time monitoring</label>
+              <p class="hint" style="margin:2px 0 0">Records which applications staff have open on domain-joined PCs. Off by default. When off, it does not appear on the client's portal at all.</p>
+            </div>
+            <input type="checkbox" id="screen_monitoring" name="screen_monitoring"
+                   style="width:auto;margin:0"
+                   {% if t.screen_monitoring %}checked{% endif %}
+                   onchange="document.getElementById('consentWrap').style.display = this.checked ? 'block' : 'none'">
+          </div>
+          <div id="consentWrap" style="display:{% if t.screen_monitoring %}block{% else %}none{% endif %}">
+            <label for="screen_consent_note">Authorisation note</label>
+            <input id="screen_consent_note" name="screen_consent_note"
+                   value="{{ t.screen_consent_note or '' }}"
+                   placeholder="e.g. Authorised by Sam (NCS) 4 Sep 2026, handbook cl.7">
+            <p class="hint">Required to turn monitoring on. Record who at the client authorised it and when — this is a monitoring feature and the note is your evidence of consent.</p>
+          </div>
+        </div>
 
         <button type="submit">Save changes</button>
       </form>

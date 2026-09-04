@@ -82,7 +82,9 @@ def sql_end_exclusive(end_inclusive):
 
 
 def render_dashboard(conn, t, start, end, show_logout, export_url, hide_brand=False):
-    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end))
+    show_screen = bool("screen_monitoring" in t.keys() and t["screen_monitoring"])
+    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end),
+                               include_screen_time=show_screen)
     return render_template("dashboard.html", data=data,
                            display_name=t["display_name"], brand=BRAND,
                            show_logout=show_logout, export_url=export_url,
@@ -278,6 +280,16 @@ def admin_edit_tenant(name):
             error = "Email is required — it's needed for password-reset links and the weekly report."
         else:
             dbmod.update_tenant(conn, name, display_name, email)
+            # Screen monitoring toggle. Enabling requires an authorisation
+            # note — same rule the API enforces — because turning on staff
+            # monitoring without a record of who agreed is the risk.
+            want_on = bool(request.form.get("screen_monitoring"))
+            note = request.form.get("screen_consent_note", "").strip()
+            if want_on and not note:
+                error = "To turn on screen-time monitoring, add an authorisation note recording who approved it."
+                t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
+                return render_template("admin_edit_tenant.html", brand=BRAND, error=error, t=t)
+            dbmod.set_screen_monitoring(conn, name, want_on, note if want_on else None)
             return redirect(url_for("admin_dashboard"))
     return render_template("admin_edit_tenant.html", brand=BRAND, error=error, t=t)
 
@@ -459,7 +471,9 @@ def dashboard_data_json():
     if not t:
         return jsonify({"error": "not logged in"}), 401
     start, end = resolve_range(conn, t["name"], request.args)
-    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end))
+    show_screen = bool("screen_monitoring" in t.keys() and t["screen_monitoring"])
+    data = dbmod.dashboard_data(conn, t["name"], start, sql_end_exclusive(end),
+                               include_screen_time=show_screen)
     return jsonify(data)
 
 

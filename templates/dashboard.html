@@ -268,6 +268,20 @@
     </table>
   </div>
 
+  <div class="card" id="screenCard" style="display:none">
+    <div class="card-hd">
+      <div>
+        <h2>Time on screen</h2>
+        <p class="desc">Measured on office computers by checking which program was in front. Leisure sites are shown separately. Only company PCs are included \u2014 not phones.</p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
+    </div>
+    <table class="doms" id="screenTable">
+      <thead><tr><th>Person</th><th>Leisure time</th><th>Mostly</th><th style="text-align:right">Time at PC</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <p class="foot">This report shows which websites were looked up on the office network. It is a guide to activity and how it changes over time, not a measure of how long anyone spent on a site. Adverts and background activity are left out of the figures.</p>
 </div>
 <div id="tip"></div>
@@ -480,6 +494,27 @@
     host.innerHTML = bits.join('');
   }
 
+  function screenTable() {
+    const card = document.getElementById('screenCard');
+    const st = D.screen_time;
+    // Absent entirely when monitoring is off for this client - the card
+    // never appears, the feature simply doesn't exist on their portal.
+    if (!st || !st.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    const fmtMin = m => m >= 60 ? (Math.floor(m/60) + 'h ' + (m%60) + 'm') : (m + 'm');
+    const tb = document.querySelector('#screenTable tbody');
+    tb.innerHTML = '';
+    for (const r of st) {
+      const sites = (r.sites || []).map(x => x.site + ' ' + fmtMin(x.minutes)).join(', ');
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + cap(r.user) + '</td><td>' +
+        (r.leisure_minutes ? fmtMin(r.leisure_minutes) : '\u2014') + '</td><td>' +
+        (sites || '\u2014') + '</td><td style="text-align:right">' +
+        fmtMin(r.minutes) + '</td>';
+      tb.appendChild(tr);
+    }
+  }
+
   function flaggedTable() {
     const card = document.getElementById('flaggedCard');
     const rows = D.flagged_detail || [];
@@ -567,7 +602,7 @@
     }
   }
 
-  function render() { statusBanner(); kpis(); catChart(); userChart(); summaryText(); flaggedTable();
+  function render() { statusBanner(); kpis(); catChart(); userChart(); summaryText(); flaggedTable(); screenTable();
     trendChart(); domTable(); }
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);
