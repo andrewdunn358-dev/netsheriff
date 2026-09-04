@@ -84,5 +84,14 @@ $settings  = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries `
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings -Force | Out-Null
 
+# Fire it once now rather than waiting for the first scheduled tick. Without
+# this there's a one-minute dead zone after install where nothing has run,
+# which made every post-install check look broken. Start-ScheduledTask runs
+# it in the same interactive-user context the trigger uses, so a successful
+# run here also proves the principal is right before we walk away.
+Start-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 6
+$info = Get-ScheduledTaskInfo -TaskName $taskName
 Write-Output "Installed '$taskName' (runs as interactive user, every minute, hidden)."
+Write-Output "First run result: $($info.LastTaskResult) (0 = ok)."
 Write-Output "Monitoring is gated server-side by tenant '$Tenant' - dormant until enabled there."
