@@ -149,15 +149,21 @@ def main():
     # showing as social media because NxFilter labelled it that way and we
     # had no entry of our own; pinning it here fixes it at source.
     OVERRIDES = {
-        "lenovo.com": "business",
-        "support.lenovo.com": "business",
-        "microsoft.com": "business",
-        "office.com": "business",
-        "office365.com": "business",
-        "windowsupdate.com": "business",
-        "apple.com": "business",
-        "dell.com": "business",
-        "hp.com": "business",
+        # Lenovo, HP, Dell etc. have online stores, so NxFilter tags their
+        # whole domain 'Shopping' - but the high-volume subdomains are software
+        # update and support infrastructure (Vantage, driver downloads, support
+        # portals), not shopping, and were inflating people's 'leisure' counts.
+        # Match the base domains; categorize() checks parent domains, so
+        # 'filedownload.lenovo.com' resolves via 'lenovo.com'.
+        "lenovo.com": "business", "lenovomm.com": "business",
+        "csw.lenovo.com": "business", "pcsupport.lenovo.com": "business",
+        "hp.com": "business", "hpconnected.com": "business",
+        "dell.com": "business", "dellcdn.com": "business",
+        "microsoft.com": "business", "office.com": "business",
+        "office365.com": "business", "windowsupdate.com": "business",
+        "apple.com": "business", "mzstatic.com": "business",
+        "intel.com": "business", "nvidia.com": "business",
+        "webrootcloudav.com": "business", "bitdefender.com": "business",
     }
     for d, code in OVERRIDES.items():
         lookup[d] = code
