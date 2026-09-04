@@ -65,11 +65,17 @@ try{ Invoke-RestMethod -Uri "`$PortalUrl/api/activity" -Method Post -ContentType
 # setting means nothing is ever visible to the user.
 $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
     -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-$trigger.Repetition = (New-ScheduledTaskTrigger -Once -At (Get-Date) `
+# A time-based trigger that starts now and repeats every minute for ~10 years,
+# NOT an at-logon trigger. The logon trigger only fires on a fresh interactive
+# logon (remote-background sessions don't count), so it can sit "Ready" and
+# never run - which is exactly what happened. This fires regardless of logon
+# state; if nobody's at the machine the sampler just finds no foreground
+# window and exits, which is harmless.
+$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 1) `
-    -RepetitionDuration (New-TimeSpan -Days 1)).Repetition
-# 'Users' group principal = runs in the context of the interactive user.
+    -RepetitionDuration ([TimeSpan]::MaxValue)
+# 'Users' group principal = runs in the context of whichever user is
+# interactively logged on, so the foreground-window read works.
 $principal = New-ScheduledTaskPrincipal -GroupId "S-1-5-32-545" -RunLevel Limited
 $settings  = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew `
