@@ -144,6 +144,9 @@
       background:#fff !important; }
     header.rpt { border-bottom-color:#ddd; }
   }
+  .summary p{margin:0 0 10px;font-size:15px;line-height:1.55}
+  .summary p:last-child{margin-bottom:0}
+  .summary .muted{font-size:13px;color:var(--deemph,#777);line-height:1.5}
 </style>
 </head>
 <body class="viz-root">
@@ -191,11 +194,21 @@
 
   <div class="kpis" id="kpis"></div>
 
+  <div class="card" id="summaryCard">
+    <div class="card-hd">
+      <div>
+        <h2>In short</h2>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8"/></svg></div>
+    </div>
+    <div id="summaryText" class="summary"></div>
+  </div>
+
   <div class="card">
     <div class="card-hd">
       <div>
         <h2>Where the office's browsing went</h2>
-        <p class="desc">DNS requests by category across all staff (ads &amp; background trackers excluded).</p>
+        <p class="desc">What kind of sites the office looked at. Adverts and background activity are left out.</p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div>
     </div>
@@ -218,19 +231,8 @@
   <div class="card">
     <div class="card-hd">
       <div>
-        <h2 id="heatTitle">Daily pattern</h2>
-        <p class="desc" id="heatDesc"></p>
-      </div>
-      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
-    </div>
-    <div id="heatChart"></div>
-  </div>
-
-  <div class="card">
-    <div class="card-hd">
-      <div>
         <h2>Day-by-day trend</h2>
-        <p class="desc">All browsing vs. social &amp; leisure browsing, whole office.</p>
+        <p class="desc">How busy each day was, and how much of it was social or leisure.</p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div>
     </div>
@@ -242,7 +244,7 @@
     <div class="card-hd">
       <div>
         <h2>Most visited sites</h2>
-        <p class="desc">Top destinations across the office for the period.</p>
+        <p class="desc">The sites the office looked at most.</p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></div>
     </div>
@@ -266,11 +268,7 @@
     </table>
   </div>
 
-  <p class="foot">Figures are DNS requests observed by the filtering service — a
-  measure of browsing activity and its pattern over time, not literal minutes on
-  screen. Devices on mobile data are not visible to the filter. Report generated
-  automatically; queries to ad networks and background trackers are excluded from
-  category and site figures.</p>
+  <p class="foot">This report shows which websites were looked up on the office network. It is a guide to activity and how it changes over time, not a measure of how long anyone spent on a site. Adverts and background activity are left out of the figures.</p>
 </div>
 <div id="tip"></div>
 
@@ -313,8 +311,8 @@
     const k = D.kpis, host = document.getElementById('kpis');
     host.innerHTML = '';
     const items = [
-      ['Web requests', fmt(k.total), 'across ' + k.users + ' signed-in users'],
-      ['Social & leisure share', k.distraction_pct + '%', 'of all browsing'],
+      ['Activity recorded', fmt(k.total), 'across ' + k.users + ' signed-in ' + (k.users === 1 ? 'person' : 'people')],
+      ['Social & leisure', k.distraction_pct + '%', 'of all browsing'],
       // Says 'flagged', not 'blocked'. NCS is monitor-only: nothing was
       // stopped, these matched malware/phishing lists. Claiming otherwise
       // would be contradicted the moment the client asks what was blocked.
@@ -434,6 +432,41 @@
     hbars(document.getElementById('userChart'), rows, { labelW: 110 });
   }
 
+  // Says the findings outright, in sentences. A business owner shouldn't
+  // have to read four charts and work out the conclusion themselves.
+  function summaryText() {
+    const k = D.kpis, host = document.getElementById('summaryText');
+    const days = Math.max(D.daily.length, 1);
+    const top = D.per_user && D.per_user.length ? D.per_user[0] : null;
+    const bits = [];
+
+    if (k.threat > 0) {
+      bits.push('<p><b>' + fmt(k.threat) + ' visit' + (k.threat === 1 ? '' : 's') +
+        ' went to sites known for scams or harmful software.</b> These are listed ' +
+        'below and are worth looking into.</p>');
+    } else {
+      bits.push('<p><b>Nothing harmful was found</b> on the office computers this period.</p>');
+    }
+
+    if (top && top.distraction > 0) {
+      const sites = (top.top_sites || []).slice(0, 3)
+        .map(x => x.domain.replace(/^www\./, '')).join(', ');
+      bits.push('<p>Social media and leisure sites made up <b>' + k.distraction_pct +
+        '%</b> of the office\u2019s browsing. The most was from <b>' + cap(top.user) +
+        '</b>' + (sites ? ', mainly ' + sites : '') + '.</p>');
+    } else {
+      bits.push('<p>Very little social media or leisure browsing was recorded this period.</p>');
+    }
+
+    bits.push('<p class="muted">Based on ' + fmt(k.users) + ' signed-in ' +
+      (k.users === 1 ? 'person' : 'people') + ' over ' + days + ' day' +
+      (days === 1 ? '' : 's') + '. This shows which sites were looked up, not how ' +
+      'long anyone spent on them. Phones on mobile data, and phones using their own ' +
+      'private lookup service, are not included.</p>');
+
+    host.innerHTML = bits.join('');
+  }
+
   function flaggedTable() {
     const card = document.getElementById('flaggedCard');
     const rows = D.flagged_detail || [];
@@ -451,46 +484,6 @@
         fmt(r.requests) + '</td>';
       tb.appendChild(tr);
     }
-  }
-
-  function heatChart() {
-    const host = document.getElementById('heatChart'); host.innerHTML = '';
-    const dates = Object.keys(D.heatmap);
-    document.getElementById('heatTitle').textContent = D.flagged_user
-      ? cap(D.flagged_user) + "'s daily pattern — social & leisure sites"
-      : 'Daily pattern';
-    document.getElementById('heatDesc').textContent =
-      'Each cell is one hour of one day. Darker = more social/leisure requests in that hour. Office hours shown.';
-    if (!dates.length) return;
-    const h0 = 8, h1 = 18, hours = h1 - h0;
-    const W = Math.min(host.clientWidth || 860, 900), lab = 64;
-    const cw = Math.floor((W - lab - 10) / hours), ch = 26,
-          H = dates.length * (ch + 2) + 26;
-    const max = Math.max(...dates.map(d => Math.max(...D.heatmap[d].slice(h0, h1))), 1);
-    const ramp = [C('--seq-100'),C('--seq-200'),C('--seq-300'),C('--seq-400'),
-                  C('--seq-500'),C('--seq-600'),C('--seq-700')];
-    const svg = el('svg', { width: '100%', viewBox: `0 0 ${W} ${H}` });
-    dates.forEach((d, r) => {
-      const y = r * (ch + 2);
-      const t = el('text', { x: lab - 8, y: y + ch - 8, 'text-anchor': 'end' });
-      t.setAttribute('class', 'axis'); t.textContent = dlab(d); svg.appendChild(t);
-      for (let h = h0; h < h1; h++) {
-        const v = D.heatmap[d][h] || 0;
-        const cell = el('rect', { x: lab + (h - h0) * cw, y, width: cw - 2,
-          height: ch, rx: 3,
-          fill: v === 0 ? C('--page') : ramp[Math.min(6, Math.floor(v / max * 6.99))] });
-        cell.addEventListener('mousemove', ev => showTip(ev, '<b>' + dlab(d) +
-          ', ' + h + ':00–' + (h+1) + ':00</b><div class="t2">' + fmt(v) +
-          ' social/leisure requests</div>'));
-        cell.addEventListener('mouseleave', hideTip);
-        svg.appendChild(cell);
-      }
-    });
-    for (let h = h0; h < h1; h += 2) {
-      const t = el('text', { x: lab + (h - h0) * cw + 2, y: H - 8 });
-      t.setAttribute('class', 'axis'); t.textContent = h + ':00'; svg.appendChild(t);
-    }
-    host.appendChild(svg);
   }
 
   function trendChart() {
@@ -561,7 +554,7 @@
     }
   }
 
-  function render() { statusBanner(); kpis(); catChart(); userChart(); flaggedTable(); heatChart();
+  function render() { statusBanner(); kpis(); catChart(); userChart(); summaryText(); flaggedTable();
     trendChart(); domTable(); }
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);
