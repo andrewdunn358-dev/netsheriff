@@ -51,6 +51,7 @@ public class Fg {
 `$pid_=0; [void][Fg]::GetWindowThreadProcessId(`$h,[ref]`$pid_)
 `$proc=Get-Process -Id `$pid_ -ErrorAction SilentlyContinue; if(-not `$proc){exit 0}
 `$pn=`$proc.ProcessName.ToLower()
+("{0} pn={1} title=[{2}]" -f (Get-Date -Format 'HH:mm:ss'), `$pn, `$title) | Out-File 'C:\Windows\Temp\ns-title.log' -Append -Encoding ascii
 # Never record our own launcher. If wscript/powershell is somehow foreground
 # at the sample instant (its own launch), skip rather than log a false
 # 'powershell' - which is the bug that made every sample read powershell.
