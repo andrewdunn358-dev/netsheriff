@@ -84,9 +84,17 @@ if ($Browsers -contains $procName -and $title) {
 $title = $null
 
 # Who is actually at the machine (the console session), not the service account.
-$user = (Get-CimInstance Win32_ComputerSystem).UserName
+# Avoid Get-CimInstance Win32_ComputerSystem here - on a busy domain
+# controller that WMI query can block for up to a minute and drag the whole
+# box's responsiveness with it. Read the interactive user from the owner of
+# the explorer.exe process instead, which is cheap and doesn't touch WMI.
+$user = $null
+try {
+    $ex = Get-Process explorer -IncludeUserName -ErrorAction Stop | Select-Object -First 1
+    if ($ex -and $ex.UserName) { $user = $ex.UserName.Split('\')[-1] }
+} catch {}
+if (-not $user) { $user = $env:USERNAME }
 if (-not $user) { Write-Output "Nobody signed in."; exit 0 }
-$user = $user.Split('\')[-1]
 
 $body = @{
     tenant  = $Tenant

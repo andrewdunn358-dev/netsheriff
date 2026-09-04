@@ -46,18 +46,21 @@ public class Fg {
   [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out uint pid);
 }
 '@
-`$h=[Fg]::GetForegroundWindow(); if(`$h -eq [IntPtr]::Zero){exit 0}
+`$dbg='C:\Windows\Temp\ns-activity-debug.log'
+function log(`$m){ ("{0} {1}" -f (Get-Date -Format 'HH:mm:ss'), `$m) | Out-File `$dbg -Append -Encoding ascii }
+`$h=[Fg]::GetForegroundWindow(); if(`$h -eq [IntPtr]::Zero){log 'exit: no foreground window'; exit 0}
 `$sb=New-Object System.Text.StringBuilder 512; [void][Fg]::GetWindowText(`$h,`$sb,`$sb.Capacity); `$title=`$sb.ToString()
 `$pid_=0; [void][Fg]::GetWindowThreadProcessId(`$h,[ref]`$pid_)
-`$proc=Get-Process -Id `$pid_ -ErrorAction SilentlyContinue; if(-not `$proc){exit 0}
+`$proc=Get-Process -Id `$pid_ -ErrorAction SilentlyContinue; if(-not `$proc){log 'exit: no process'; exit 0}
 `$pn=`$proc.ProcessName.ToLower()
 `$app=if(`$AppNames.ContainsKey(`$pn)){`$AppNames[`$pn]}else{`$proc.ProcessName}
 `$site=`$null
 if((`$Browsers -contains `$pn) -and `$title){`$l=`$title.ToLower(); foreach(`$k in `$LeisureSites.Keys){if(`$l.Contains(`$k)){`$site=`$LeisureSites[`$k]; break}}}
 `$title=`$null
-`$u="`$env:USERNAME"; if(-not `$u){exit 0}
+`$u="`$env:USERNAME"; if(-not `$u){log 'exit: no username'; exit 0}
+log ("sending: user=`$u app=`$app site=`$site")
 `$body=@{tenant=`$Tenant; samples=@(@{username=`$u; hostname=`$env:COMPUTERNAME; app=`$app; site=`$site; sampled_at=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); seconds=`$SampleSecs})} | ConvertTo-Json -Depth 4 -Compress
-try{ Invoke-RestMethod -Uri "`$PortalUrl/api/activity" -Method Post -ContentType 'application/json' -Body `$body -Headers @{'X-Agent-Token'=`$AgentToken} -TimeoutSec 20 | Out-Null }catch{}
+try{ `$r=Invoke-RestMethod -Uri "`$PortalUrl/api/activity" -Method Post -ContentType 'application/json' -Body `$body -Headers @{'X-Agent-Token'=`$AgentToken} -TimeoutSec 20; log ("posted ok: " + (`$r | ConvertTo-Json -Compress)) }catch{ log ("POST failed: " + `$_.Exception.Message) }
 "@ | Set-Content -Path $script -Encoding UTF8
 
 # Register the task: runs as whoever is logged on, at logon, every minute,
