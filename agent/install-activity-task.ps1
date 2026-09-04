@@ -73,7 +73,7 @@ $action  = New-ScheduledTaskAction -Execute "powershell.exe" `
 # window and exits, which is harmless.
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 1) `
-    -RepetitionDuration ([TimeSpan]::MaxValue)
+    -RepetitionDuration (New-TimeSpan -Days 3650)
 # 'Users' group principal = runs in the context of whichever user is
 # interactively logged on, so the foreground-window read works.
 $principal = New-ScheduledTaskPrincipal -GroupId "S-1-5-32-545" -RunLevel Limited
