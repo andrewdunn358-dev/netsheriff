@@ -294,14 +294,58 @@ def admin_edit_tenant(name):
     return render_template("admin_edit_tenant.html", brand=BRAND, error=error, t=t)
 
 
+@app.route("/agent/<name>/<script>")
+def agent_script(name, script):
+    """Serve an agent script to a client's DC, with this client's token baked
+    in. Not admin-session protected - the DC has no session - but gated by a
+    short-lived signed token in the query string, minted on the admin deploy
+    page. So the URL works for ~2 hours after you generate it and then dies,
+    and the script (which carries the agent token) isn't world-readable.
+    """
+    from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+    s = URLSafeTimedSerializer(app.secret_key, salt="agent-download")
+    try:
+        payload = s.loads(request.args.get("t", ""), max_age=7200)
+    except (BadSignature, SignatureExpired):
+        abort(403)
+    if payload != "{}/{}".format(name, script):
+        abort(403)
+
+    allowed = {"install": "install-activity-task.ps1",
+               "uninstall": "uninstall-activity-task.ps1"}
+    if script not in allowed:
+        abort(404)
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
+    if not t:
+        abort(404)
+    path = os.path.join(os.path.dirname(__file__), "agent", allowed[script])
+    try:
+        body = open(path, encoding="ascii").read()
+    except OSError:
+        abort(404)
+    if script == "install":
+        token = t["agent_token"] if "agent_token" in t.keys() else None
+        if not token:
+            token = dbmod.issue_agent_token(conn, name)
+        portal = request.url_root.rstrip("/")
+        body = body.replace('[string]$PortalUrl  = "https://portal.netsheriff.co.uk"',
+                            '[string]$PortalUrl  = "{}"'.format(portal))
+        body = body.replace('[string]$Tenant     = "NCS"',
+                            '[string]$Tenant     = "{}"'.format(name))
+        body = body.replace('[string]$AgentToken = "CHANGE-ME"',
+                            '[string]$AgentToken = "{}"'.format(token))
+    return app.response_class(body, mimetype="text/plain")
+
+
 @app.route("/admin/tenants/<name>/deploy")
 @admin_required
 def admin_deploy_tenant(name):
-    """Per-client deployment page for the screen-time agent. Shows ready-to-run
-    Tactical commands with this client's own token filled in, plus links to
-    the raw scripts. The portal can't reach into the client's DC to run these
-    itself - deployment happens in Tactical - so this is the place to get the
-    correct command from, per client, without hand-editing tokens."""
+    """Per-client deployment page. One-line command that pulls the agent from
+    THIS server (not GitHub) with the client's token baked in, via a
+    short-lived signed link. Deployment runs in Tactical; this is where you
+    copy the command from."""
+    from itsdangerous import URLSafeTimedSerializer
     conn = get_conn()
     t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
     if not t:
@@ -310,33 +354,27 @@ def admin_deploy_tenant(name):
     if not token:
         token = dbmod.issue_agent_token(conn, name)
     portal = request.url_root.rstrip("/")
-    api = "https://api.github.com/repos/andrewdunn358-dev/netsheriff/contents/agent"
-    raw = "https://raw.githubusercontent.com/andrewdunn358-dev/netsheriff/main/agent"
-    # Fetch via the GitHub API rather than the raw CDN: the raw endpoint caches
-    # aggressively and served a stale copy to the DC during testing, while the
-    # API reflects the latest commit immediately. Needs a User-Agent header or
-    # GitHub returns 403. GH_PAT is read from the server environment so the
-    # token isn't baked into a page.
-    def fetch_and_run(script, extra=""):
-        return (
-            "powershell -Command \""
-            "$ProgressPreference='SilentlyContinue'; "
-            "[Net.ServicePointManager]::SecurityProtocol='Tls12'; "
-            "$p='C:\\Windows\\Temp\\ns-" + script.split('-')[0] + ".ps1'; "
-            "Remove-Item $p -Force -ErrorAction SilentlyContinue; "
-            "$wc=New-Object Net.WebClient; "
-            "$wc.Headers.Add('User-Agent','NetSheriff'); "
-            "$wc.Headers.Add('Authorization','token <GITHUB_PAT>'); "
-            "$wc.Headers.Add('Accept','application/vnd.github.raw'); "
-            "$wc.DownloadFile('" + api + "/" + script + "',$p); "
-            "& $p" + extra + " | Out-String\"")
+    s = URLSafeTimedSerializer(app.secret_key, salt="agent-download")
 
-    install_cmd = fetch_and_run(
-        "install-activity-task.ps1",
-        " -Tenant '{}' -AgentToken '{}'".format(name, token))
-    uninstall_cmd = fetch_and_run("uninstall-activity-task.ps1")
-    return render_template("admin_deploy.html", brand=BRAND, t=t,
-                           token=token, portal=portal, raw=raw,
+    def signed_url(script):
+        sig = s.dumps("{}/{}".format(name, script))
+        return "{}{}?t={}".format(portal, url_for("agent_script", name=name, script=script), sig)
+
+    inst_url = signed_url("install")
+    uninst_url = signed_url("uninstall")
+
+    def one_liner(url, tmp):
+        return ("powershell -Command \""
+                "$ProgressPreference='SilentlyContinue'; "
+                "[Net.ServicePointManager]::SecurityProtocol='Tls12'; "
+                "$p='C:\\Windows\\Temp\\" + tmp + "'; "
+                "(New-Object Net.WebClient).DownloadFile('" + url + "',$p); "
+                "& $p | Out-String\"")
+
+    install_cmd = one_liner(inst_url, "ns-install.ps1")
+    uninstall_cmd = one_liner(uninst_url, "ns-uninstall.ps1")
+    return render_template("admin_deploy.html", brand=BRAND, t=t, token=token,
+                           portal=portal, inst_url=inst_url, uninst_url=uninst_url,
                            install_cmd=install_cmd, uninstall_cmd=uninstall_cmd)
 
 

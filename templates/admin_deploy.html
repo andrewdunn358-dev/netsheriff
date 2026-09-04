@@ -90,7 +90,7 @@
       <h2>Install (run once per machine)</h2>
       <p class="desc">Downloads the agent and registers the hidden per-user task, with this client's token built in.</p>
       <div class="cmd" id="cmd-install">{{ install_cmd }}<button class="copy" data-t="cmd-install">Copy</button></div>
-      <p class="hint">In Tactical: Script Manager &rarr; paste as a PowerShell script &rarr; run against the machine or group. Or paste directly into a remote PowerShell terminal.</p>
+      <p class="hint">Pulls the agent from this server (not GitHub) with the token already built in. In Tactical: paste as a PowerShell script and run against the machine or group. The download link expires after 2 hours — regenerate from this page if needed.</p>
     </div>
 
     <div class="card">
@@ -101,9 +101,9 @@
 
     <div class="card">
       <h2>The scripts</h2>
-      <p class="desc">If you'd rather review or store them yourself.</p>
-      <p style="margin:0 0 6px"><a class="dl" href="{{ raw }}/install-activity-task.ps1" target="_blank">install-activity-task.ps1</a></p>
-      <p style="margin:0 0 6px"><a class="dl" href="{{ raw }}/uninstall-activity-task.ps1" target="_blank">uninstall-activity-task.ps1</a></p>
+      <p class="desc">Served from this server with the client's token built in. Links expire after 2 hours.</p>
+      <p style="margin:0 0 6px"><a class="dl" href="{{ inst_url }}" target="_blank">install-activity-task.ps1</a></p>
+      <p style="margin:0 0 6px"><a class="dl" href="{{ uninst_url }}" target="_blank">uninstall-activity-task.ps1</a></p>
       <p class="hint">Agent token for this client: <code>{{ token }}</code> — scoped to {{ t.name }} only.</p>
     </div>
   </div>
