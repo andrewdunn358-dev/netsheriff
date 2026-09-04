@@ -1,5 +1,5 @@
 <#
-    Net Sheriff — screen time reporter
+    Net Sheriff - screen time reporter
 
     Runs on domain-joined Windows workstations via Tactical RMM.
     Samples which application is in the foreground and reports it.

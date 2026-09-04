@@ -1,5 +1,5 @@
 <#
-    Net Sheriff — session reporter (NCS)
+    Net Sheriff - session reporter (NCS)
     Paste into Tactical Script Manager. Run on NCSServer every 1-2 minutes.
     Shell: PowerShell. Run as: SYSTEM.
 #>

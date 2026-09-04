@@ -1,5 +1,5 @@
 <#
-    Net Sheriff — screen-time agent uninstaller
+    Net Sheriff - screen-time agent uninstaller
     Run via Tactical to remove the agent and its task from a machine.
     For staff monitoring, removal should be as clean and provable as install.
 #>
@@ -19,8 +19,8 @@ if (Test-Path $dir) {
 if ($removed.Count) {
     Write-Output "Removed: $($removed -join ', ')."
 } else {
-    Write-Output "Nothing to remove — agent was not installed."
+    Write-Output "Nothing to remove - agent was not installed."
 }
 # Verify
 $stillThere = [bool](Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) -or (Test-Path $dir)
-Write-Output ("Verification: " + $(if ($stillThere) { "FAILED — remnants remain" } else { "clean" }))
+Write-Output ("Verification: " + $(if ($stillThere) { "FAILED - remnants remain" } else { "clean" }))

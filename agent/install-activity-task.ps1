@@ -1,7 +1,7 @@
 <#
-    Net Sheriff — screen-time agent installer
+    Net Sheriff - screen-time agent installer
 
-    Run this ONCE per machine via Tactical (as SYSTEM is fine — this installer
+    Run this ONCE per machine via Tactical (as SYSTEM is fine - this installer
     needs admin; only the sampling task it creates runs as the user).
 
     Why a scheduled task and not a Tactical task: the sampler reads the
@@ -79,4 +79,4 @@ Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger `
     -Principal $principal -Settings $settings -Force | Out-Null
 
 Write-Output "Installed '$taskName' (runs as interactive user, every minute, hidden)."
-Write-Output "Monitoring is gated server-side by tenant '$Tenant' — dormant until enabled there."
+Write-Output "Monitoring is gated server-side by tenant '$Tenant' - dormant until enabled there."

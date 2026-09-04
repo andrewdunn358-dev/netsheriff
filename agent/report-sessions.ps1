@@ -1,5 +1,5 @@
 <#
-    Net Sheriff — session reporter
+    Net Sheriff - session reporter
 
     Runs on a client's domain controller via Tactical RMM (as SYSTEM) on a
     schedule. Parses `net session` and posts IP-to-username pairs to NxReport,
@@ -8,7 +8,7 @@
     Why `net session`: it's the same source NxFilter's own mapper uses, and it
     needs no agent on workstations and no DHCP reservations.
 
-    Run every 1-2 minutes. Sessions are transient — a machine that's idle or
+    Run every 1-2 minutes. Sessions are transient - a machine that's idle or
     off simply won't appear, which is why frequent sampling matters.
 
     Configure below, or set the matching environment variables.
