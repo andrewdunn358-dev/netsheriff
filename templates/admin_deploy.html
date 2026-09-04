@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ brand }} — Deploy screen-time agent</title>
+<link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='img/favicon-32.png') }}">
+<style>
+  :root { color-scheme: light dark; }
+  .viz-root {
+    color-scheme: light;
+    --surface-1:#fcfcfb; --page:#f9f9f7;
+    --ink-1:#0b0b0b; --ink-2:#52514e; --ink-3:#898781;
+    --grid:#e1e0d9; --ring:rgba(11,11,11,0.10);
+    --brand-orange:#ee4b00; --critical:#d03b3b; --ok:#2f8f4e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:#1a1a19; --page:#0d0d0d;
+      --ink-1:#ffffff; --ink-2:#c3c2b7; --ink-3:#898781;
+      --grid:#2c2c2a; --ring:rgba(255,255,255,0.10);
+    }
+  }
+  * { box-sizing:border-box; }
+  body.viz-root { margin:0; background:var(--page); color:var(--ink-1);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:28px 20px 60px; }
+  header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  header h1 { font-size:20px; margin:0; }
+  header a { font-size:13px; color:var(--brand-orange); text-decoration:none; }
+  .sub { color:var(--ink-2); margin:0 0 22px; }
+  .card { background:var(--surface-1); border:1px solid var(--ring); border-radius:12px;
+    padding:20px 22px; margin-bottom:18px; }
+  .card h2 { font-size:15px; margin:0 0 4px; }
+  .card p.desc { font-size:13px; color:var(--ink-2); margin:0 0 14px; }
+  .status { display:inline-block; font-size:12px; font-weight:600; padding:3px 9px;
+    border-radius:99px; }
+  .status.on { background:rgba(47,143,78,0.12); color:var(--ok); }
+  .status.off { background:rgba(137,135,129,0.15); color:var(--ink-3); }
+  .cmd { position:relative; background:var(--page); border:1px solid var(--grid);
+    border-radius:8px; padding:12px 14px; font:12px/1.5 ui-monospace,"Cascadia Code",Consolas,monospace;
+    color:var(--ink-1); white-space:pre-wrap; word-break:break-all; margin:0 0 6px; }
+  .copy { position:absolute; top:8px; right:8px; font-size:11px; font-weight:600;
+    background:var(--brand-orange); color:#fff; border:none; border-radius:6px;
+    padding:4px 9px; cursor:pointer; }
+  .copy:hover { filter:brightness(0.92); }
+  .hint { font-size:11px; color:var(--ink-3); margin:0 0 18px; }
+  .steps { font-size:13px; color:var(--ink-2); margin:0 0 14px; padding-left:18px; }
+  .steps li { margin-bottom:5px; }
+  .warn { background:rgba(208,59,59,0.08); border:1px solid rgba(208,59,59,0.25);
+    border-radius:8px; padding:12px 14px; font-size:13px; color:var(--ink-1); margin-bottom:18px; }
+  a.dl { color:var(--brand-orange); font-size:13px; text-decoration:none; }
+</style>
+</head>
+<body class="viz-root">
+  <div class="wrap">
+    <header>
+      <h1>Deploy screen-time agent</h1>
+      <a href="/admin/dashboard">&larr; Back</a>
+    </header>
+    <p class="sub">{{ t.display_name }} —
+      {% if t.screen_monitoring %}
+        <span class="status on">monitoring ON</span>
+      {% else %}
+        <span class="status off">monitoring OFF</span>
+      {% endif %}
+    </p>
+
+    {% if not t.screen_monitoring %}
+    <div class="warn">
+      Monitoring is currently <b>off</b> for this client. You can install the agent now —
+      it stays dormant and stores nothing until you turn monitoring on from the client's
+      edit page (which requires an authorisation note). Nothing appears on their portal
+      until then.
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <h2>Before you roll out</h2>
+      <ul class="steps">
+        <li>These run on <b>domain-joined Windows PCs</b> via Tactical RMM. Phones and non-domain devices aren't covered.</li>
+        <li>The install may be run as SYSTEM in Tactical — only the sampling task it creates runs as the signed-in user.</li>
+        <li>Test on <b>one machine</b> and confirm a sample arrives before deploying to a group.</li>
+        <li>Make sure the client has agreed to screen-time monitoring, and that their staff handbook covers it, before turning it on.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Install (run once per machine)</h2>
+      <p class="desc">Downloads the agent and registers the hidden per-user task, with this client's token built in.</p>
+      <div class="cmd" id="cmd-install">{{ install_cmd }}<button class="copy" data-t="cmd-install">Copy</button></div>
+      <p class="hint">In Tactical: Script Manager &rarr; paste as a PowerShell script &rarr; run against the machine or group. Or paste directly into a remote PowerShell terminal.</p>
+    </div>
+
+    <div class="card">
+      <h2>Uninstall (remove from a machine)</h2>
+      <p class="desc">Removes the task and files, then verifies removal.</p>
+      <div class="cmd" id="cmd-uninstall">{{ uninstall_cmd }}<button class="copy" data-t="cmd-uninstall">Copy</button></div>
+    </div>
+
+    <div class="card">
+      <h2>The scripts</h2>
+      <p class="desc">If you'd rather review or store them yourself.</p>
+      <p style="margin:0 0 6px"><a class="dl" href="{{ raw }}/install-activity-task.ps1" target="_blank">install-activity-task.ps1</a></p>
+      <p style="margin:0 0 6px"><a class="dl" href="{{ raw }}/uninstall-activity-task.ps1" target="_blank">uninstall-activity-task.ps1</a></p>
+      <p class="hint">Agent token for this client: <code>{{ token }}</code> — scoped to {{ t.name }} only.</p>
+    </div>
+  </div>
+
+<script>
+  document.querySelectorAll('.copy').forEach(function(b){
+    b.addEventListener('click', function(){
+      var el = document.getElementById(b.dataset.t);
+      var text = el.childNodes[0].textContent;
+      navigator.clipboard.writeText(text).then(function(){
+        var o = b.textContent; b.textContent = 'Copied'; setTimeout(function(){ b.textContent = o; }, 1400);
+      });
+    });
+  });
+</script>
+</body>
+</html>

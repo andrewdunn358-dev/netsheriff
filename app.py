@@ -294,6 +294,52 @@ def admin_edit_tenant(name):
     return render_template("admin_edit_tenant.html", brand=BRAND, error=error, t=t)
 
 
+@app.route("/admin/tenants/<name>/deploy")
+@admin_required
+def admin_deploy_tenant(name):
+    """Per-client deployment page for the screen-time agent. Shows ready-to-run
+    Tactical commands with this client's own token filled in, plus links to
+    the raw scripts. The portal can't reach into the client's DC to run these
+    itself - deployment happens in Tactical - so this is the place to get the
+    correct command from, per client, without hand-editing tokens."""
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
+    if not t:
+        abort(404)
+    token = t["agent_token"] if "agent_token" in t.keys() else None
+    if not token:
+        token = dbmod.issue_agent_token(conn, name)
+    portal = request.url_root.rstrip("/")
+    api = "https://api.github.com/repos/andrewdunn358-dev/netsheriff/contents/agent"
+    raw = "https://raw.githubusercontent.com/andrewdunn358-dev/netsheriff/main/agent"
+    # Fetch via the GitHub API rather than the raw CDN: the raw endpoint caches
+    # aggressively and served a stale copy to the DC during testing, while the
+    # API reflects the latest commit immediately. Needs a User-Agent header or
+    # GitHub returns 403. GH_PAT is read from the server environment so the
+    # token isn't baked into a page.
+    def fetch_and_run(script, extra=""):
+        return (
+            "powershell -Command \""
+            "$ProgressPreference='SilentlyContinue'; "
+            "[Net.ServicePointManager]::SecurityProtocol='Tls12'; "
+            "$p='C:\\Windows\\Temp\\ns-" + script.split('-')[0] + ".ps1'; "
+            "Remove-Item $p -Force -ErrorAction SilentlyContinue; "
+            "$wc=New-Object Net.WebClient; "
+            "$wc.Headers.Add('User-Agent','NetSheriff'); "
+            "$wc.Headers.Add('Authorization','token <GITHUB_PAT>'); "
+            "$wc.Headers.Add('Accept','application/vnd.github.raw'); "
+            "$wc.DownloadFile('" + api + "/" + script + "',$p); "
+            "& $p" + extra + " | Out-String\"")
+
+    install_cmd = fetch_and_run(
+        "install-activity-task.ps1",
+        " -Tenant '{}' -AgentToken '{}'".format(name, token))
+    uninstall_cmd = fetch_and_run("uninstall-activity-task.ps1")
+    return render_template("admin_deploy.html", brand=BRAND, t=t,
+                           token=token, portal=portal, raw=raw,
+                           install_cmd=install_cmd, uninstall_cmd=uninstall_cmd)
+
+
 @app.route("/admin/tenants/<name>/reset", methods=["POST"])
 @admin_required
 def admin_reset_tenant(name):
