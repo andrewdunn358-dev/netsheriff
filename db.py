@@ -307,6 +307,18 @@ MAP_GRACE_MINUTES = 15
 # Written as a correlated subquery so it can be dropped into any existing
 # aggregate without restructuring the queries around it.
 IDENTITY = f"""COALESCE(
+    NULLIF(CASE
+        WHEN dns_log.user IS NULL THEN NULL
+        -- NxCloud puts the operator name here when it has no real username,
+        -- so 'NCS' means "unattributed", not a person.
+        WHEN dns_log.user = dns_log.tenant THEN NULL
+        WHEN dns_log.user = 'unknown' THEN NULL
+        -- Where no exactly-matching NxCloud user exists, names arrive
+        -- prefixed as 'tenant_username'. Strip it for display.
+        WHEN dns_log.user LIKE dns_log.tenant || '\\_%' ESCAPE '\\'
+            THEN substr(dns_log.user, length(dns_log.tenant) + 2)
+        ELSE dns_log.user
+    END, ''),
     (SELECT m.username FROM ip_user_map m
       WHERE m.tenant = dns_log.tenant
         AND m.ip = dns_log.client_ip
