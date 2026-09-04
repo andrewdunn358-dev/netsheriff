@@ -219,7 +219,7 @@
     <div class="card-hd">
       <div>
         <h2>Social media &amp; leisure browsing, by person</h2>
-        <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar to see the sites involved.</span></p>
+        <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar to see the sites and when the activity happened.</span></p>
         <p class="desc">These are DNS lookups, not time spent. A single page can trigger several, and embedded content can trigger one without anyone visiting the site. Useful for spotting patterns over time, not as a measure of minutes.</p>
         <p class="desc" id="unattribNote" style="display:none"></p>
       </div>
@@ -408,9 +408,14 @@
       label: cap(u.user), v: u.distraction, em: u.user === D.flagged_user,
       color: u.user === D.flagged_user ? C('--s1') : C('--deemph'),
       tip: '<b>' + cap(u.user) + '</b><div class="t2">' + fmt(u.distraction) +
-        ' social/leisure requests (~' +
-        fmt(Math.round(u.distraction / Math.max(D.daily.length, 1))) +
-        ' per working day)<br>' + fmt(u.total) + ' total requests (' +
+        ' social/leisure lookups' +
+        (u.active_windows
+          ? '<br>Activity in ' + fmt(u.active_windows) + ' separate ' +
+            (u.active_windows === 1 ? 'period' : 'periods') +
+            (u.first_seen ? ', between ' + u.first_seen.slice(11,16) + ' and ' +
+              u.last_seen.slice(11,16) : '')
+          : '') +
+        '<br>' + fmt(u.total) + ' lookups in total (' +
         Math.round(100 * u.distraction / Math.max(u.total,1)) + '% leisure)' +
         ((u.top_sites && u.top_sites.length)
           ? '<div class="t2" style="margin-top:6px">Mostly: ' +
@@ -451,9 +456,17 @@
     if (top && top.distraction > 0) {
       const sites = (top.top_sites || []).slice(0, 3)
         .map(x => x.domain.replace(/^www\./, '')).join(', ');
-      bits.push('<p>Social media and leisure sites made up <b>' + k.distraction_pct +
+      let line = '<p>Social media and leisure sites made up <b>' + k.distraction_pct +
         '%</b> of the office\u2019s browsing. The most was from <b>' + cap(top.user) +
-        '</b>' + (sites ? ', mainly ' + sites : '') + '.</p>');
+        '</b>' + (sites ? ', mainly ' + sites : '') + '.';
+      if (top.active_windows > 1 && top.first_seen) {
+        line += ' This was spread across <b>' + fmt(top.active_windows) +
+          ' separate periods</b> of the day, between ' + top.first_seen.slice(11,16) +
+          ' and ' + top.last_seen.slice(11,16) + ', rather than in one sitting.';
+      } else if (top.active_windows === 1) {
+        line += ' This was all in one short spell rather than through the day.';
+      }
+      bits.push(line + '</p>');
     } else {
       bits.push('<p>Very little social media or leisure browsing was recorded this period.</p>');
     }

@@ -419,9 +419,32 @@ def dashboard_data(conn, tenant, start, end):
                 and len(sites[r["person"]]) < 4):
             sites[r["person"]].append({"domain": r["domain"], "requests": r["n"]})
 
+    # How spread out someone's leisure activity was. Deliberately NOT a
+    # duration: DNS gives no session start or end, and caching means a long
+    # visit can produce few lookups. What we can say honestly is how many
+    # separate 15-minute windows contained leisure activity, and when the
+    # first and last were. "Activity in 14 separate periods between 09:10 and
+    # 16:45" is checkable; "spent 3.5 hours on Instagram" would be invented.
+    spread = defaultdict(lambda: {"windows": set(), "first": None, "last": None})
+    for r in q(f"SELECT {IDENTITY} AS person, ts, domain, category {base}"
+               f" ORDER BY ts"):
+        if friendly(r["category"]) not in DISTRACTION or is_tracking(r["domain"]):
+            continue
+        p = r["person"]
+        ts = r["ts"]
+        # bucket = date + quarter-hour index, so windows don't merge across days
+        spread[p]["windows"].add(ts[:13] + ":" + str(int(ts[14:16]) // 15))
+        if spread[p]["first"] is None:
+            spread[p]["first"] = ts
+        spread[p]["last"] = ts
+
     per_user = [{"user": u, "total": per_user_all[u],
                  "distraction": per_user_distr.get(u, 0),
-                 "top_sites": sites.get(u, [])} for u in users_sorted]
+                 "top_sites": sites.get(u, []),
+                 "active_windows": len(spread[u]["windows"]) if u in spread else 0,
+                 "first_seen": spread[u]["first"] if u in spread else None,
+                 "last_seen": spread[u]["last"] if u in spread else None}
+                for u in users_sorted]
 
     # hourly heatmap for flagged user's distraction traffic: {day: [24 counts]}
     heat = {}
