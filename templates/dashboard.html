@@ -254,20 +254,6 @@
     </table>
   </div>
 
-  <div class="card" id="flaggedCard" style="display:none">
-    <div class="card-hd">
-      <div>
-        <h2>Worth knowing</h2>
-        <p class="desc">Notes on what the service could and could not see this period.</p>
-      </div>
-      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
-    </div>
-    <table class="doms" id="flaggedTable">
-      <thead><tr><th>Site</th><th>Who</th><th>What it means</th><th style="text-align:right">Requests</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
   <div class="card" id="screenCard" style="display:none">
     <div class="card-hd">
       <div>
@@ -515,25 +501,6 @@
     }
   }
 
-  function flaggedTable() {
-    const card = document.getElementById('flaggedCard');
-    const rows = D.flagged_detail || [];
-    if (!rows.length) { card.style.display = 'none'; return; }
-    card.style.display = '';
-    const tb = document.querySelector('#flaggedTable tbody');
-    tb.innerHTML = '';
-    for (const r of rows) {
-      const meaning = r.kind === 'bypass'
-        ? 'Phone or tablet using its own private lookup service \u2014 anything it browsed afterwards is not recorded here'
-        : 'Known for scams or harmful software \u2014 worth a look';
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + r.domain + '</td><td>' + cap(String(r.person)) +
-        '</td><td>' + meaning + '</td><td style="text-align:right">' +
-        fmt(r.requests) + '</td>';
-      tb.appendChild(tr);
-    }
-  }
-
   function trendChart() {
     const host = document.getElementById('trendChart'); host.innerHTML = '';
     const leg = document.getElementById('trendLegend');
@@ -602,7 +569,7 @@
     }
   }
 
-  function render() { statusBanner(); kpis(); catChart(); userChart(); summaryText(); flaggedTable(); screenTable();
+  function render() { statusBanner(); kpis(); catChart(); userChart(); summaryText(); screenTable();
     trendChart(); domTable(); }
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);

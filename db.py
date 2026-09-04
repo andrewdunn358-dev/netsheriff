@@ -242,6 +242,30 @@ def is_tracking(domain):
     return d.startswith(TRACKING_PREFIXES)
 
 
+# Domains that are software talking to its makers, not a person browsing.
+# Antivirus, RMM, OS telemetry, update and auth services, connectivity checks.
+# These dominate raw DNS volume and mislead a client if shown as "visited".
+BACKGROUND_SUBSTRINGS = (
+    "bitdefender", "gravityzone", "tacticalrmm", "barracudamsp", "mw-rmm",
+    "windowsupdate", "update.microsoft", "events.data.microsoft",
+    "settings-win.data.microsoft", "dsp.mp.microsoft", "do.dsp",
+    "officeclient.microsoft", "config.office", "outlook.office365",
+    "login.microsoftonline", "login.live", "login.windows",
+    "sfx.ms", "aria.microsoft", "msftconnecttest", "msftncsi",
+    "icanhazip", "ipify", "digicert", "lencr.org", "pki.goog",
+    "gvt1.com", "gvt2.com", "googleapis.com", "cdn.bitdefender",
+    "safebrowsing", "crl.", "ocsp.", "ctldl", "edgedl", "nr-data.net",
+    "synthesis-it.co.uk", "softether", "ddns",
+)
+
+
+def is_background(domain):
+    """True for machine-to-machine traffic - software phoning home - which
+    shouldn't count as a site the office 'visited'."""
+    d = (domain or "").lower()
+    return any(s in d for s in BACKGROUND_SUBSTRINGS)
+
+
 def connect(path, check_same_thread=True):
     conn = sqlite3.connect(path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
@@ -569,12 +593,24 @@ def dashboard_data(conn, tenant, start, end, include_screen_time=False):
             trend[r["d"]]["distraction"] += r["n"]
     daily = [{"date": d, **v} for d, v in sorted(trend.items())]
 
-    # top domains (skip ads/trackers)
+    # "Most visited" should mean sites people actually looked at. Raw DNS is
+    # dominated by software phoning home - antivirus, Windows telemetry, the
+    # RMM agent, our own endpoints - which to a client reads as though the
+    # office spends all day on bitdefender.com. Filter that class out so the
+    # table shows browsing, not background noise.
     rows = q(f"SELECT domain, category, COUNT(*) n {base}"
-             f" GROUP BY domain ORDER BY n DESC LIMIT 60")
-    top_domains = [{"domain": r["domain"], "category": friendly(r["category"]),
-                    "requests": r["n"]} for r in rows
-                   if friendly(r["category"]) != "Ads & Trackers"][:12]
+             f" GROUP BY domain ORDER BY n DESC LIMIT 200")
+    top_domains = []
+    for r in rows:
+        cat = friendly(r["category"])
+        if cat in ("Ads & Trackers", "Unclassified"):
+            continue
+        if is_background(r["domain"]):
+            continue
+        top_domains.append({"domain": r["domain"], "category": cat,
+                            "requests": r["n"]})
+        if len(top_domains) >= 12:
+            break
 
     # Flagged requests split by what they actually are. NxCloud sets the same
     # 'blocked' flag for a phishing domain and for a phone looking up
