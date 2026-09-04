@@ -354,25 +354,36 @@ def admin_change_password():
     return render_template("admin_change_password.html", brand=BRAND, error=error, success=success)
 
 
+def _auth_agent(conn, tenant):
+    """Authenticate an agent posting for a tenant against that tenant's own
+    token. Falls back to the legacy shared env token so existing deployments
+    keep working until they're reissued a per-tenant one. Returns the tenant
+    row on success, or a (json, status) error tuple.
+    """
+    supplied = request.headers.get("X-Agent-Token", "")
+    row = conn.execute("SELECT * FROM tenants WHERE name=?", (tenant,)).fetchone()
+    if not row:
+        return jsonify(error="unknown tenant"), 404
+    tok = row["agent_token"] if "agent_token" in row.keys() else None
+    shared = os.environ.get("NXREPORT_AGENT_TOKEN", "")
+    ok = ((tok and secrets.compare_digest(supplied, tok))
+          or (shared and secrets.compare_digest(supplied, shared)))
+    if not ok:
+        return jsonify(error="unauthorised"), 401
+    return row
+
+
 @app.route("/api/ip-users", methods=["POST"])
 def api_ip_users():
     """Ingest IP-to-username observations from a site agent.
 
-    Authenticated by a shared token in the X-Agent-Token header, checked
-    against NXREPORT_AGENT_TOKEN. This is machine-to-machine, so it uses a
-    token rather than a session — but it must never be left unset, or anyone
-    could poison attribution data.
+    Authenticated by the tenant's own token in the X-Agent-Token header (see
+    _auth_agent). Machine-to-machine, so a token rather than a session.
 
     Expected body:
         {"tenant": "NCS", "sessions": [{"ip": "192.168.0.34",
                                         "username": "ThomasLeonard"}, ...]}
     """
-    expected = os.environ.get("NXREPORT_AGENT_TOKEN", "")
-    if not expected:
-        return jsonify(error="agent ingest not configured"), 503
-    if not secrets.compare_digest(request.headers.get("X-Agent-Token", ""), expected):
-        return jsonify(error="unauthorised"), 401
-
     payload = request.get_json(silent=True) or {}
     tenant = (payload.get("tenant") or "").strip()
     sessions = payload.get("sessions")
@@ -381,8 +392,9 @@ def api_ip_users():
 
     conn = get_conn()
     try:
-        if not conn.execute("SELECT 1 FROM tenants WHERE name=?", (tenant,)).fetchone():
-            return jsonify(error="unknown tenant"), 404
+        auth = _auth_agent(conn, tenant)
+        if isinstance(auth, tuple):
+            return auth
         pairs = [(s.get("ip"), s.get("username")) for s in sessions
                  if isinstance(s, dict)]
         extended, created = dbmod.record_ip_users(conn, tenant, pairs)
@@ -395,16 +407,12 @@ def api_ip_users():
 def api_activity():
     """Foreground samples from a domain-joined workstation.
 
-    Same token auth as /api/ip-users. Agents send only an application name
-    and, for browsers, a matched leisure site - never a raw window title,
-    which would sweep up document names and email subjects.
+    Two gates: the tenant's agent token, and the tenant's screen_monitoring
+    flag. If monitoring is off for the client, samples are refused even from
+    a valid agent — so the feature is controlled entirely from the server and
+    agents can sit installed-but-dormant. Only an application name and a
+    matched leisure site are accepted; never a raw window title.
     """
-    expected = os.environ.get("NXREPORT_AGENT_TOKEN", "")
-    if not expected:
-        return jsonify(error="agent ingest not configured"), 503
-    if not secrets.compare_digest(request.headers.get("X-Agent-Token", ""), expected):
-        return jsonify(error="unauthorised"), 401
-
     payload = request.get_json(silent=True) or {}
     tenant = (payload.get("tenant") or "").strip()
     samples = payload.get("samples")
@@ -413,8 +421,14 @@ def api_activity():
 
     conn = get_conn()
     try:
-        if not conn.execute("SELECT 1 FROM tenants WHERE name=?", (tenant,)).fetchone():
-            return jsonify(error="unknown tenant"), 404
+        auth = _auth_agent(conn, tenant)
+        if isinstance(auth, tuple):
+            return auth
+        enabled = ("screen_monitoring" in auth.keys()
+                   and auth["screen_monitoring"])
+        if not enabled:
+            # Not an error the agent should retry on — it's a deliberate off.
+            return jsonify(ok=True, stored=0, monitoring="off"), 200
         stored = dbmod.record_app_usage(conn, tenant, samples)
     finally:
         conn.close()

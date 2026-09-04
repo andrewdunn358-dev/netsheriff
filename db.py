@@ -257,6 +257,19 @@ def connect(path, check_same_thread=True):
         conn.execute("ALTER TABLE tenants ADD COLUMN reset_token TEXT")
     if "reset_expiry" not in cols:
         conn.execute("ALTER TABLE tenants ADD COLUMN reset_expiry TEXT")
+    # Screen monitoring is per-client and OFF by default. It records what
+    # applications people have open, which is a bigger step than DNS logging,
+    # so it stays off until explicitly enabled for a client — and we keep a
+    # note of who authorised it and when, because that record is the
+    # difference between a feature and a liability.
+    if "screen_monitoring" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN screen_monitoring INTEGER DEFAULT 0")
+    if "screen_consent_note" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN screen_consent_note TEXT")
+    # Per-tenant agent token. A single shared token let any site's agent post
+    # data for any client; this scopes each site to its own tenant.
+    if "agent_token" not in cols:
+        conn.execute("ALTER TABLE tenants ADD COLUMN agent_token TEXT")
     admin_cols = {r["name"] for r in conn.execute("PRAGMA table_info(admin_users)")}
     if "reset_token" not in admin_cols:
         conn.execute("ALTER TABLE admin_users ADD COLUMN reset_token TEXT")
@@ -366,6 +379,30 @@ def screen_time(conn, tenant, start, end):
             "sites": [{"site": s, "minutes": round(v / 60)} for s, v in top],
         })
     return sorted(out, key=lambda x: -x["leisure_minutes"])
+
+
+def set_screen_monitoring(conn, tenant, on, consent_note=None):
+    """Turn screen monitoring on or off for a client. When turning it on,
+    consent_note records who authorised it and when — required, because
+    enabling it without a record is the liability we're trying to avoid."""
+    if on and not consent_note:
+        raise ValueError("enabling screen monitoring requires a consent note")
+    conn.execute(
+        "UPDATE tenants SET screen_monitoring=?, screen_consent_note=? WHERE name=?",
+        (1 if on else 0, consent_note if on else None, tenant))
+    conn.commit()
+    return conn.execute("SELECT screen_monitoring, screen_consent_note"
+                        " FROM tenants WHERE name=?", (tenant,)).fetchone()
+
+
+def issue_agent_token(conn, tenant):
+    """Generate and store a fresh per-tenant agent token. Returns it once —
+    it's stored, so this is the only chance to copy it into the agent."""
+    import secrets as _s
+    tok = _s.token_urlsafe(32)
+    conn.execute("UPDATE tenants SET agent_token=? WHERE name=?", (tok, tenant))
+    conn.commit()
+    return tok
 
 
 def friendly(cat):
