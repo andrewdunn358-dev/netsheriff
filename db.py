@@ -450,10 +450,30 @@ def dashboard_data(conn, tenant, start, end):
                     "requests": r["n"]} for r in rows
                    if friendly(r["category"]) != "Ads & Trackers"][:12]
 
+    # Flagged requests split by what they actually are. NxCloud sets the same
+    # 'blocked' flag for a phishing domain and for a phone looking up
+    # cloudflare-dns.com, but they mean completely different things to a
+    # client: one is a threat, the other is a device resolving DNS outside
+    # the filter so its browsing never reaches this report. Lumping them
+    # together would either cry wolf or bury a real detection.
+    bypass = threat = 0
+    for r in q(f"SELECT domain, category, COUNT(*) n {base} AND blocked=1"
+               f" GROUP BY domain, category"):
+        dom = (r["domain"] or "").lower()
+        if (friendly(r["category"]) == "Proxy / Anonymizer"
+                or r["category"] == "Proxy/Anonymizer"
+                or "mask.icloud" in dom or "mask-api.icloud" in dom
+                or dom in ("dns.quad9.net", "cloudflare-dns.com", "dns.google",
+                           "one.one.one.one", "dns.nextdns.io", "doh.opendns.com")):
+            bypass += r["n"]
+        else:
+            threat += r["n"]
+
     distr_total = sum(per_user_distr.values())
     return {
         "tenant": tenant, "start": start, "end": end,
         "kpis": {"total": total, "users": len(named), "blocked": blocked,
+                 "bypass": bypass, "threat": threat,
                  "distraction_pct": round(100 * distr_total / total, 1) if total else 0},
         "category_share": [{"category": c, "requests": n} for c, n in cat_share],
         "per_user": per_user, "flagged_user": flagged,

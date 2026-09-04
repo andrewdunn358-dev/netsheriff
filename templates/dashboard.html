@@ -304,7 +304,9 @@
       // Says 'flagged', not 'blocked'. NCS is monitor-only: nothing was
       // stopped, these matched malware/phishing lists. Claiming otherwise
       // would be contradicted the moment the client asks what was blocked.
-      ['Flagged requests', fmt(k.blocked), 'matched malware/phishing lists'],
+      [(k.threat > 0 ? 'Security alerts' : 'Outside the filter'),
+        fmt(k.threat > 0 ? k.threat : k.bypass),
+        (k.threat > 0 ? 'harmful sites detected' : 'requests we could not see')],
       // Deliberately descriptive rather than a verdict - the underlying
       // number is DNS requests, which can't distinguish a deliberate visit
       // from an embedded widget.
@@ -319,17 +321,30 @@
   }
   const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 
-  // Worst signal wins: blocked attempts > high social/leisure share > all quiet.
+  // Worst signal wins: flagged requests > high social/leisure share > all quiet.
+  // In practice most flagged requests at monitor-only sites are devices
+  // trying to look up addresses through their own private service instead
+  // of the office one, not malware. The wording says so plainly rather than
+  // implying a security incident.
   function statusBanner() {
     const host = document.getElementById('statusBanner');
     const k = D.kpis;
     let level, icon, title, sub;
-    if (k.blocked > 0) {
+    if (k.threat > 0) {
       level = 'critical'; icon = '&#9888;';
-      title = 'Requests flagged for review';
+      title = 'Harmful sites detected';
+      sub = fmt(k.threat) + ' request' + (k.threat === 1 ? '' : 's') +
+        ' went to sites known for scams or harmful software. Nothing was ' +
+        'stopped \u2014 the service is watching only \u2014 so these are ' +
+        'worth a look.';
+    } else if (k.bypass > 0) {
+      level = 'amber'; icon = '&#9888;';
+      title = 'Some devices went around the filter';
       sub = fmt(k.blocked) + ' request' + (k.blocked === 1 ? '' : 's') +
-        ' matched malware or phishing lists this period. Filtering is in ' +
-        'monitor-only mode, so these were logged, not blocked.';
+        ' this period came from devices set up to look up web addresses ' +
+        'privately, so their browsing does not appear in this report. ' +
+        'This is usually personal phones, which do it automatically. ' +
+        'Nothing was stopped \u2014 the service is watching only.';
     } else if (k.distraction_pct >= 25) {
       level = 'amber'; icon = '&#9888;';
       title = 'Social & leisure browsing is elevated';
