@@ -252,6 +252,20 @@
     </table>
   </div>
 
+  <div class="card" id="flaggedCard" style="display:none">
+    <div class="card-hd">
+      <div>
+        <h2>Requests worth knowing about</h2>
+        <p class="desc">Sites the service flagged during the period, and which device or person they came from.</p>
+      </div>
+      <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
+    </div>
+    <table class="doms" id="flaggedTable">
+      <thead><tr><th>Site</th><th>Who</th><th>What it means</th><th style="text-align:right">Requests</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <p class="foot">Figures are DNS requests observed by the filtering service — a
   measure of browsing activity and its pattern over time, not literal minutes on
   screen. Devices on mobile data are not visible to the filter. Report generated
@@ -428,6 +442,25 @@
     hbars(document.getElementById('userChart'), rows, { labelW: 110 });
   }
 
+  function flaggedTable() {
+    const card = document.getElementById('flaggedCard');
+    const rows = D.flagged_detail || [];
+    if (!rows.length) { card.style.display = 'none'; return; }
+    card.style.display = '';
+    const tb = document.querySelector('#flaggedTable tbody');
+    tb.innerHTML = '';
+    for (const r of rows) {
+      const meaning = r.kind === 'bypass'
+        ? 'Device looked up addresses privately \u2014 its browsing is not in this report'
+        : 'Known for scams or harmful software \u2014 worth a look';
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + r.domain + '</td><td>' + cap(String(r.person)) +
+        '</td><td>' + meaning + '</td><td style="text-align:right">' +
+        fmt(r.requests) + '</td>';
+      tb.appendChild(tr);
+    }
+  }
+
   function heatChart() {
     const host = document.getElementById('heatChart'); host.innerHTML = '';
     const dates = Object.keys(D.heatmap);
@@ -536,7 +569,7 @@
     }
   }
 
-  function render() { statusBanner(); kpis(); catChart(); userChart(); heatChart();
+  function render() { statusBanner(); kpis(); catChart(); userChart(); flaggedTable(); heatChart();
     trendChart(); domTable(); }
   render();
   addEventListener('resize', () => { clearTimeout(window.__rz);

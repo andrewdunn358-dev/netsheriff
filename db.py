@@ -456,18 +456,37 @@ def dashboard_data(conn, tenant, start, end):
     # client: one is a threat, the other is a device resolving DNS outside
     # the filter so its browsing never reaches this report. Lumping them
     # together would either cry wolf or bury a real detection.
+    # Matched by pattern, not a fixed list: mask-h2.icloud.com slipped past an
+    # earlier exact-match version and raised a red 'harmful sites' banner on a
+    # client dashboard for what is just an iPhone. Apple and the DoH providers
+    # add hostnames whenever they like, so anything mask*.icloud.com counts,
+    # and resolver hostnames are matched on their recognisable parts.
     bypass = threat = 0
+    bypass_re = re.compile(
+        r"(^mask[\w-]*\.icloud\.com$)"          # iCloud Private Relay, any variant
+        r"|(^|\.)(dns|doh)\."                    # dns.quad9.net, doh.opendns.com
+        r"|(cloudflare-dns|nextdns|adguard-dns|dns\.google|one\.one\.one\.one)",
+        re.I)
     for r in q(f"SELECT domain, category, COUNT(*) n {base} AND blocked=1"
                f" GROUP BY domain, category"):
         dom = (r["domain"] or "").lower()
-        if (friendly(r["category"]) == "Proxy / Anonymizer"
-                or r["category"] == "Proxy/Anonymizer"
-                or "mask.icloud" in dom or "mask-api.icloud" in dom
-                or dom in ("dns.quad9.net", "cloudflare-dns.com", "dns.google",
-                           "one.one.one.one", "dns.nextdns.io", "doh.opendns.com")):
+        if "proxy" in (r["category"] or "").lower() or bypass_re.search(dom):
             bypass += r["n"]
         else:
             threat += r["n"]
+
+    # The detail behind the flagged count. A number the client can't check is
+    # worse than no number: it either gets ignored or believed on faith.
+    flagged_detail = []
+    for r in q(f"SELECT domain, category, {IDENTITY} AS person, COUNT(*) n,"
+               f" MAX(ts) last_seen {base} AND blocked=1"
+               f" GROUP BY domain, person ORDER BY n DESC LIMIT 20"):
+        dom = (r["domain"] or "").lower()
+        kind = ("bypass" if "proxy" in (r["category"] or "").lower()
+                or bypass_re.search(dom) else "threat")
+        flagged_detail.append({
+            "domain": r["domain"], "person": r["person"], "requests": r["n"],
+            "last_seen": r["last_seen"], "kind": kind})
 
     distr_total = sum(per_user_distr.values())
     return {
@@ -480,4 +499,5 @@ def dashboard_data(conn, tenant, start, end):
         "unattributed": {"total": unattributed_total,
                          "distraction": unattributed_distr},
         "heatmap": heat, "daily": daily, "top_domains": top_domains,
+        "flagged_detail": flagged_detail,
     }
