@@ -255,8 +255,8 @@
   <div class="card" id="flaggedCard" style="display:none">
     <div class="card-hd">
       <div>
-        <h2>Requests worth knowing about</h2>
-        <p class="desc">Sites the service flagged during the period, and which device or person they came from.</p>
+        <h2>Worth knowing</h2>
+        <p class="desc">Notes on what the service could and could not see this period.</p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg></div>
     </div>
@@ -318,9 +318,9 @@
       // Says 'flagged', not 'blocked'. NCS is monitor-only: nothing was
       // stopped, these matched malware/phishing lists. Claiming otherwise
       // would be contradicted the moment the client asks what was blocked.
-      [(k.threat > 0 ? 'Security alerts' : 'Outside the filter'),
-        fmt(k.threat > 0 ? k.threat : k.bypass),
-        (k.threat > 0 ? 'harmful sites detected' : 'requests we could not see')],
+      (k.threat > 0
+        ? ['Security alerts', fmt(k.threat), 'harmful sites detected']
+        : ['Sites visited', fmt(k.distinct_domains), 'different web addresses']),
       // Deliberately descriptive rather than a verdict - the underlying
       // number is DNS requests, which can't distinguish a deliberate visit
       // from an embedded widget.
@@ -351,14 +351,6 @@
         ' went to sites known for scams or harmful software. Nothing was ' +
         'stopped \u2014 the service is watching only \u2014 so these are ' +
         'worth a look.';
-    } else if (k.bypass > 0) {
-      level = 'amber'; icon = '&#9888;';
-      title = 'Some devices went around the filter';
-      sub = fmt(k.blocked) + ' request' + (k.blocked === 1 ? '' : 's') +
-        ' this period came from devices set up to look up web addresses ' +
-        'privately, so their browsing does not appear in this report. ' +
-        'This is usually personal phones, which do it automatically. ' +
-        'Nothing was stopped \u2014 the service is watching only.';
     } else if (k.distraction_pct >= 25) {
       level = 'amber'; icon = '&#9888;';
       title = 'Social & leisure browsing is elevated';
@@ -451,7 +443,7 @@
     tb.innerHTML = '';
     for (const r of rows) {
       const meaning = r.kind === 'bypass'
-        ? 'Device looked up addresses privately \u2014 its browsing is not in this report'
+        ? 'Phone or tablet using its own private lookup service \u2014 anything it browsed afterwards is not recorded here'
         : 'Known for scams or harmful software \u2014 worth a look';
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + r.domain + '</td><td>' + cap(String(r.person)) +

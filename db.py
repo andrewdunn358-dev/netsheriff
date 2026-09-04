@@ -492,6 +492,9 @@ def dashboard_data(conn, tenant, start, end):
     return {
         "tenant": tenant, "start": start, "end": end,
         "kpis": {"total": total, "users": len(named), "blocked": blocked,
+                 "distinct_domains": conn.execute(
+                     f"SELECT COUNT(DISTINCT domain) {base}",
+                     (tenant, start, end)).fetchone()[0] or 0,
                  "bypass": bypass, "threat": threat,
                  "distraction_pct": round(100 * distr_total / total, 1) if total else 0},
         "category_share": [{"category": c, "requests": n} for c, n in cat_share],
