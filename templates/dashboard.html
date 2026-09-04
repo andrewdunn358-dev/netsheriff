@@ -258,12 +258,12 @@
     <div class="card-hd">
       <div>
         <h2>Active-window time</h2>
-        <p class="desc">On office PCs, this checks which program is in front each minute and adds up the time. It counts the window someone is actually working in — not tabs sitting open in the background — so it reflects what was on screen, not everything that was loaded. Phones aren't included.</p>
+        <p class="desc">On office PCs, this checks which program is in front each minute and adds up the time — how much active screen time, and how much of it was in a web browser. Which websites people visited is in the sites section above, from the network logs. Only the program in front is counted, not tabs open in the background, and phones aren't included.</p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div>
     </div>
     <table class="doms" id="screenTable">
-      <thead><tr><th>Person</th><th>Social / leisure</th><th>Mostly</th><th style="text-align:right">Active time</th></tr></thead>
+      <thead><tr><th>Person</th><th>In a browser</th><th>Main programs</th><th style="text-align:right">Active time</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
@@ -491,11 +491,11 @@
     const tb = document.querySelector('#screenTable tbody');
     tb.innerHTML = '';
     for (const r of st) {
-      const sites = (r.sites || []).map(x => x.site + ' ' + fmtMin(x.minutes)).join(', ');
+      const apps = (r.apps || []).map(x => x.app + ' ' + fmtMin(x.minutes)).join(', ');
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>' + cap(r.user) + '</td><td>' +
-        (r.leisure_minutes ? fmtMin(r.leisure_minutes) : '\u2014') + '</td><td>' +
-        (sites || '\u2014') + '</td><td style="text-align:right">' +
+        (r.browser_minutes ? fmtMin(r.browser_minutes) : '\u2014') + '</td><td>' +
+        (apps || '\u2014') + '</td><td style="text-align:right">' +
         fmtMin(r.minutes) + '</td>';
       tb.appendChild(tr);
     }

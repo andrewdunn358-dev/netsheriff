@@ -34,34 +34,25 @@ New-Item -ItemType Directory -Path $dir -Force | Out-Null
 # reports. Mirrors agent/report-activity.ps1 - keep them in step.
 @"
 `$PortalUrl='$PortalUrl'; `$Tenant='$Tenant'; `$AgentToken='$AgentToken'; `$SampleSecs=60
-`$LeisureSites=@{'facebook'='Facebook';'instagram'='Instagram';'twitter'='X/Twitter';'tiktok'='TikTok';'snapchat'='Snapchat';'youtube'='YouTube';'netflix'='Netflix';'reddit'='Reddit';'linkedin'='LinkedIn';'amazon'='Amazon';'ebay'='eBay';'hotukdeals'='HotUKDeals';'asos'='ASOS';'bet365'='Betting';'paddypower'='Betting';'whatsapp'='WhatsApp';'pinterest'='Pinterest';'twitch'='Twitch';'spotify'='Spotify'}
 `$AppNames=@{'chrome'='Chrome';'msedge'='Edge';'firefox'='Firefox';'outlook'='Outlook';'excel'='Excel';'winword'='Word';'powerpnt'='PowerPoint';'teams'='Teams';'ms-teams'='Teams';'explorer'='File Explorer';'sage'='Sage'}
 `$Browsers=@('chrome','msedge','firefox')
 `$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol='Tls12'
 Add-Type @'
-using System; using System.Runtime.InteropServices; using System.Text;
+using System; using System.Runtime.InteropServices;
 public class Fg {
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
   [DllImport("user32.dll")] public static extern int GetWindowThreadProcessId(IntPtr h, out uint pid);
 }
 '@
 `$h=[Fg]::GetForegroundWindow(); if(`$h -eq [IntPtr]::Zero){exit 0}
-`$sb=New-Object System.Text.StringBuilder 512; [void][Fg]::GetWindowText(`$h,`$sb,`$sb.Capacity); `$title=`$sb.ToString()
 `$pid_=0; [void][Fg]::GetWindowThreadProcessId(`$h,[ref]`$pid_)
 `$proc=Get-Process -Id `$pid_ -ErrorAction SilentlyContinue; if(-not `$proc){exit 0}
 `$pn=`$proc.ProcessName.ToLower()
-("{0} pn={1} title=[{2}]" -f (Get-Date -Format 'HH:mm:ss'), `$pn, `$title) | Out-File 'C:\Windows\Temp\ns-title.log' -Append -Encoding ascii
-# Never record our own launcher. If wscript/powershell is somehow foreground
-# at the sample instant (its own launch), skip rather than log a false
-# 'powershell' - which is the bug that made every sample read powershell.
 if(`$pn -eq 'wscript' -or `$pn -eq 'powershell' -or `$pn -eq 'conhost'){exit 0}
 `$app=if(`$AppNames.ContainsKey(`$pn)){`$AppNames[`$pn]}else{`$proc.ProcessName}
-`$site=`$null
-if((`$Browsers -contains `$pn) -and `$title){`$l=`$title.ToLower(); foreach(`$k in `$LeisureSites.Keys){if(`$l.Contains(`$k)){`$site=`$LeisureSites[`$k]; break}}}
-`$title=`$null
+`$isBrowser=if(`$Browsers -contains `$pn){1}else{0}
 `$u="`$env:USERNAME"; if(-not `$u){exit 0}
-`$body=@{tenant=`$Tenant; samples=@(@{username=`$u; hostname=`$env:COMPUTERNAME; app=`$app; site=`$site; sampled_at=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); seconds=`$SampleSecs})} | ConvertTo-Json -Depth 4 -Compress
+`$body=@{tenant=`$Tenant; samples=@(@{username=`$u; hostname=`$env:COMPUTERNAME; app=`$app; is_browser=`$isBrowser; sampled_at=(Get-Date).ToString('yyyy-MM-dd HH:mm:ss'); seconds=`$SampleSecs})} | ConvertTo-Json -Depth 4 -Compress
 try{ Invoke-RestMethod -Uri "`$PortalUrl/api/activity" -Method Post -ContentType 'application/json' -Body `$body -Headers @{'X-Agent-Token'=`$AgentToken} -TimeoutSec 20 | Out-Null }catch{}
 "@ | Set-Content -Path $script -Encoding UTF8
 

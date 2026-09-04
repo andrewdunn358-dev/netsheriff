@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS app_usage (
     username TEXT NOT NULL,        -- AD login name from the agent
     hostname TEXT,                 -- machine the sample came from
     app TEXT NOT NULL,             -- friendly application name, e.g. 'Chrome'
-    site TEXT,                     -- matched leisure site only, never a raw title
+    is_browser INTEGER DEFAULT 0,  -- 1 if the active app was a web browser
     sampled_at TEXT NOT NULL,      -- 'YYYY-MM-DD HH:MM:SS'
     seconds INTEGER NOT NULL       -- seconds this sample represents
 );
@@ -299,6 +299,12 @@ def connect(path, check_same_thread=True):
         conn.execute("ALTER TABLE admin_users ADD COLUMN reset_token TEXT")
     if "reset_expiry" not in admin_cols:
         conn.execute("ALTER TABLE admin_users ADD COLUMN reset_expiry TEXT")
+    # app_usage moved from per-site to per-app+is_browser (title-based site
+    # matching was unreliable; 'which sites' now comes from DNS). Add the new
+    # column to existing DBs; the old 'site' column is left in place harmlessly.
+    au_cols = {r["name"] for r in conn.execute("PRAGMA table_info(app_usage)")}
+    if au_cols and "is_browser" not in au_cols:
+        conn.execute("ALTER TABLE app_usage ADD COLUMN is_browser INTEGER DEFAULT 0")
     conn.commit()
     return conn
 
@@ -369,10 +375,10 @@ def record_app_usage(conn, tenant, samples):
         if not user or not app:
             continue
         conn.execute(
-            "INSERT INTO app_usage (tenant, username, hostname, app, site,"
+            "INSERT INTO app_usage (tenant, username, hostname, app, is_browser,"
             " sampled_at, seconds) VALUES (?,?,?,?,?,?,?)",
             (tenant, user, (s.get("hostname") or "").strip() or None, app,
-             (s.get("site") or "").strip() or None,
+             1 if s.get("is_browser") else 0,
              s.get("sampled_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              int(s.get("seconds") or 60)))
         n += 1
@@ -381,28 +387,31 @@ def record_app_usage(conn, tenant, samples):
 
 
 def screen_time(conn, tenant, start, end):
-    """Minutes per person, split into leisure sites and everything else."""
+    """Active-window minutes per person, split into browser vs other apps,
+    with the top apps by time. Deliberately says nothing about *which* sites -
+    that comes from the DNS layer, which sees real domains reliably. This layer
+    answers 'how much active screen time, and how much of it in a browser'."""
     rows = conn.execute(
-        "SELECT username, app, site, SUM(seconds) secs FROM app_usage"
+        "SELECT username, app, is_browser, SUM(seconds) secs FROM app_usage"
         " WHERE tenant=? AND sampled_at>=? AND sampled_at<?"
-        " GROUP BY username, app, site", (tenant, start, end)).fetchall()
-    people = defaultdict(lambda: {"total": 0, "leisure": 0, "sites": defaultdict(int)})
+        " GROUP BY username, app", (tenant, start, end)).fetchall()
+    people = defaultdict(lambda: {"total": 0, "browser": 0, "apps": defaultdict(int)})
     for r in rows:
         p = people[r["username"]]
         p["total"] += r["secs"]
-        if r["site"]:
-            p["leisure"] += r["secs"]
-            p["sites"][r["site"]] += r["secs"]
+        if r["is_browser"]:
+            p["browser"] += r["secs"]
+        p["apps"][r["app"]] += r["secs"]
     out = []
     for user, d in people.items():
-        top = sorted(d["sites"].items(), key=lambda kv: -kv[1])[:4]
+        top = sorted(d["apps"].items(), key=lambda kv: -kv[1])[:4]
         out.append({
             "user": user,
             "minutes": round(d["total"] / 60),
-            "leisure_minutes": round(d["leisure"] / 60),
-            "sites": [{"site": s, "minutes": round(v / 60)} for s, v in top],
+            "browser_minutes": round(d["browser"] / 60),
+            "apps": [{"app": a, "minutes": round(v / 60)} for a, v in top],
         })
-    return sorted(out, key=lambda x: -x["leisure_minutes"])
+    return sorted(out, key=lambda x: -x["minutes"])
 
 
 def set_screen_monitoring(conn, tenant, on, consent_note=None):
