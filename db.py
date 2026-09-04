@@ -1,4 +1,5 @@
 """SQLite storage + aggregation queries for NxReport."""
+import re
 import sqlite3
 from collections import defaultdict
 
@@ -299,6 +300,10 @@ def insert_rows(conn, rows):
 # briefly misattribute. 15 minutes suits a 5-minute poll.
 MAP_GRACE_MINUTES = 15
 
+# Identities that are really just an IP: a device we saw but nobody was
+# logged into. Matches IPv4 and the bare IPv6 forms NxRelay can emit.
+IP_LIKE = re.compile(r"^(\d{1,3}(\.\d{1,3}){3}|[0-9a-fA-F:]{6,})$")
+
 # Resolves each dns_log row to a person where we can. Order matters:
 #   1. the username mapped to that private IP at that moment (real name)
 #   2. the private IP itself (a device we know about but nobody was logged in,
@@ -358,7 +363,21 @@ def dashboard_data(conn, tenant, start, end):
         per_user_all[r["person"]] += r["n"]
         if friendly(r["category"]) in DISTRACTION:
             per_user_distr[r["person"]] += r["n"]
-    users_sorted = sorted(per_user_all, key=lambda u: -per_user_distr.get(u, 0))
+
+    # Anything that resolved to a bare IP is a device nobody was logged into —
+    # in practice phones and handsets on the wifi. They can't be identified
+    # (iOS randomises its MAC per network) and the client can't act on them,
+    # so showing them by IP invites false conclusions: an unnamed phone can
+    # top the leisure chart while being someone's own device on their own
+    # time. Report them as one honest total instead, so the numbers still
+    # reconcile without implying anything about a person.
+    named = [u for u in per_user_all if not IP_LIKE.match(str(u))]
+    unattributed_total = sum(per_user_all[u] for u in per_user_all
+                             if IP_LIKE.match(str(u)))
+    unattributed_distr = sum(per_user_distr.get(u, 0) for u in per_user_all
+                             if IP_LIKE.match(str(u)))
+
+    users_sorted = sorted(named, key=lambda u: -per_user_distr.get(u, 0))
     # Only flag someone if they've genuinely got distraction activity - without
     # this check, the top user by distraction count still "wins" even with
     # zero such requests, making the dashboard look like it's flagging normal
@@ -367,8 +386,19 @@ def dashboard_data(conn, tenant, start, end):
     # flagged_user=None; this just makes sure that path actually gets used.
     flagged = (users_sorted[0] if users_sorted and per_user_distr.get(users_sorted[0], 0) > 0
                else None)
+
+    # Top leisure domains per person, so the chart tooltip can say what someone
+    # was actually on rather than just a count. Capped at 4 — enough to be
+    # meaningful, not a full browsing history in a summary chart.
+    sites = defaultdict(list)
+    for r in q(f"SELECT {IDENTITY} AS person, domain, category, COUNT(*) n {base}"
+               f" GROUP BY person, domain ORDER BY n DESC"):
+        if friendly(r["category"]) in DISTRACTION and len(sites[r["person"]]) < 4:
+            sites[r["person"]].append({"domain": r["domain"], "requests": r["n"]})
+
     per_user = [{"user": u, "total": per_user_all[u],
-                 "distraction": per_user_distr.get(u, 0)} for u in users_sorted]
+                 "distraction": per_user_distr.get(u, 0),
+                 "top_sites": sites.get(u, [])} for u in users_sorted]
 
     # hourly heatmap for flagged user's distraction traffic: {day: [24 counts]}
     heat = {}
@@ -404,5 +434,7 @@ def dashboard_data(conn, tenant, start, end):
                  "distraction_pct": round(100 * distr_total / total, 1) if total else 0},
         "category_share": [{"category": c, "requests": n} for c, n in cat_share],
         "per_user": per_user, "flagged_user": flagged,
+        "unattributed": {"total": unattributed_total,
+                         "distraction": unattributed_distr},
         "heatmap": heat, "daily": daily, "top_domains": top_domains,
     }

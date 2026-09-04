@@ -206,7 +206,8 @@
     <div class="card-hd">
       <div>
         <h2>Social media &amp; leisure browsing, by person</h2>
-        <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar for the working-day average.</span></p>
+        <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar to see the sites involved.</span></p>
+        <p class="desc" id="unattribNote" style="display:none"></p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     </div>
@@ -383,8 +384,24 @@
         ' social/leisure requests (~' +
         fmt(Math.round(u.distraction / Math.max(D.daily.length, 1))) +
         ' per working day)<br>' + fmt(u.total) + ' total requests (' +
-        Math.round(100 * u.distraction / Math.max(u.total,1)) + '% leisure)</div>'
+        Math.round(100 * u.distraction / Math.max(u.total,1)) + '% leisure)' +
+        ((u.top_sites && u.top_sites.length)
+          ? '<div class="t2" style="margin-top:6px">Mostly: ' +
+            u.top_sites.map(s => s.domain + ' (' + fmt(s.requests) + ')').join(', ') +
+            '</div>'
+          : '') + '</div>'
     }));
+    const un = D.unattributed || {total: 0, distraction: 0};
+    const note = document.getElementById('unattribNote');
+    if (note && un.total) {
+      // Phones and handsets on the wifi: seen, but nobody was logged in, so
+      // they can't be attributed to a person. Stated plainly so the totals
+      // reconcile without implying anything about an individual.
+      note.style.display = '';
+      note.textContent = 'Excludes ' + fmt(un.total) + ' requests (' +
+        fmt(un.distraction) + ' social/leisure) from devices with no signed-in ' +
+        'user \u2014 typically phones and handsets on the wi-fi.';
+    }
     hbars(document.getElementById('userChart'), rows, { labelW: 110 });
   }
 
