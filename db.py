@@ -217,6 +217,24 @@ FRIENDLY = {
     "ads": "Ads & Trackers", "adult": "Adult (blocked)", "gambling": "Gambling (blocked)",
     "malware": "Malicious (blocked)", "phishing": "Malicious (blocked)",
     "games": "Games", "sports": "Sports", "travel": "Travel",
+    # NxFilter's own category names, which leak through when our categoriser
+    # returns None and the code falls back to NxFilter's label. Without these
+    # they pass through .title() and appear as separate rows - 'Social Network'
+    # alongside our 'Social Media', 'Business/Service' alongside 'Business &
+    # Work' - making the report look broken. Map them onto the same labels.
+    "social network": "Social Media", "web ads/analytics": "Ads & Trackers",
+    "tracker": "Ads & Trackers", "advertisement": "Ads & Trackers",
+    "business/service": "Business & Work", "business & work": "Business & Work",
+    "job": "Business & Work", "job search": "Business & Work",
+    "computer/technology": "Computers & Tech", "information technology": "Computers & Tech",
+    "cdn": "Background & Updates", "software/hardware": "Computers & Tech",
+    "search engines": "Search", "portal": "Search",
+    "entertainment": "Video & Streaming", "music": "Music & Audio",
+    "streaming media": "Video & Streaming", "education": "Education",
+    "chat": "Messaging", "instant messaging": "Messaging",
+    "proxy/anonymizer": "Privacy / Bypass", "anonymizer": "Privacy / Bypass",
+    "finance/banking": "Business & Work", "personal storage": "Files & Storage",
+    "unclassified": "Uncategorised", "": "Uncategorised",
 }
 # Categories counted as "distraction" for the flagged-user metrics.
 DISTRACTION = {"Social Media", "Video & Streaming", "Games", "Shopping", "Sports"}

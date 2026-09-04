@@ -142,6 +142,26 @@ def main():
     for d in BUSINESS:
         lookup[d] = "business"
 
+    # Applied last so it wins over everything above, including upstream
+    # blocklist entries. This is where we correct domains that get
+    # miscategorised - by a blocklist we import, or (once this file is the
+    # authoritative source) by NxFilter's own fallback. E.g. lenovo.com was
+    # showing as social media because NxFilter labelled it that way and we
+    # had no entry of our own; pinning it here fixes it at source.
+    OVERRIDES = {
+        "lenovo.com": "business",
+        "support.lenovo.com": "business",
+        "microsoft.com": "business",
+        "office.com": "business",
+        "office365.com": "business",
+        "windowsupdate.com": "business",
+        "apple.com": "business",
+        "dell.com": "business",
+        "hp.com": "business",
+    }
+    for d, code in OVERRIDES.items():
+        lookup[d] = code
+
     with open(args.out, "w") as f:
         json.dump(lookup, f)
 
