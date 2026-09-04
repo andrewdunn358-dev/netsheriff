@@ -51,6 +51,10 @@ public class Fg {
 `$pid_=0; [void][Fg]::GetWindowThreadProcessId(`$h,[ref]`$pid_)
 `$proc=Get-Process -Id `$pid_ -ErrorAction SilentlyContinue; if(-not `$proc){exit 0}
 `$pn=`$proc.ProcessName.ToLower()
+# Never record our own launcher. If wscript/powershell is somehow foreground
+# at the sample instant (its own launch), skip rather than log a false
+# 'powershell' - which is the bug that made every sample read powershell.
+if(`$pn -eq 'wscript' -or `$pn -eq 'powershell' -or `$pn -eq 'conhost'){exit 0}
 `$app=if(`$AppNames.ContainsKey(`$pn)){`$AppNames[`$pn]}else{`$proc.ProcessName}
 `$site=`$null
 if((`$Browsers -contains `$pn) -and `$title){`$l=`$title.ToLower(); foreach(`$k in `$LeisureSites.Keys){if(`$l.Contains(`$k)){`$site=`$LeisureSites[`$k]; break}}}
@@ -60,11 +64,18 @@ if((`$Browsers -contains `$pn) -and `$title){`$l=`$title.ToLower(); foreach(`$k 
 try{ Invoke-RestMethod -Uri "`$PortalUrl/api/activity" -Method Post -ContentType 'application/json' -Body `$body -Headers @{'X-Agent-Token'=`$AgentToken} -TimeoutSec 20 | Out-Null }catch{}
 "@ | Set-Content -Path $script -Encoding UTF8
 
-# Register the task: runs as whoever is logged on, at logon, every minute,
-# hidden, no console window. -WindowStyle Hidden plus the task's own hidden
-# setting means nothing is ever visible to the user.
-$action  = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$script`""
+# Launch via a tiny VBScript shim that runs PowerShell truly windowless.
+# -WindowStyle Hidden still briefly creates a console that grabs focus at
+# launch - which is why every sample recorded 'powershell': the agent caught
+# its own host window. WScript's Run with window-style 0 creates no window at
+# all, so nothing ever steals foreground from the user's actual app.
+$shim = Join-Path $dir "run.vbs"
+@"
+CreateObject("WScript.Shell").Run "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""$script""", 0, False
+"@ | Set-Content -Path $shim -Encoding ascii
+
+$action  = New-ScheduledTaskAction -Execute "wscript.exe" `
+    -Argument "`"$shim`""
 # A time-based trigger that starts now and repeats every minute for ~10 years,
 # NOT an at-logon trigger. The logon trigger only fires on a fresh interactive
 # logon (remote-background sessions don't count), so it can sit "Ready" and
