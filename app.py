@@ -391,6 +391,36 @@ def api_ip_users():
     return jsonify(ok=True, received=len(sessions), extended=extended, created=created)
 
 
+@app.route("/api/activity", methods=["POST"])
+def api_activity():
+    """Foreground samples from a domain-joined workstation.
+
+    Same token auth as /api/ip-users. Agents send only an application name
+    and, for browsers, a matched leisure site - never a raw window title,
+    which would sweep up document names and email subjects.
+    """
+    expected = os.environ.get("NXREPORT_AGENT_TOKEN", "")
+    if not expected:
+        return jsonify(error="agent ingest not configured"), 503
+    if not secrets.compare_digest(request.headers.get("X-Agent-Token", ""), expected):
+        return jsonify(error="unauthorised"), 401
+
+    payload = request.get_json(silent=True) or {}
+    tenant = (payload.get("tenant") or "").strip()
+    samples = payload.get("samples")
+    if not tenant or not isinstance(samples, list):
+        return jsonify(error="tenant and samples[] required"), 400
+
+    conn = get_conn()
+    try:
+        if not conn.execute("SELECT 1 FROM tenants WHERE name=?", (tenant,)).fetchone():
+            return jsonify(error="unknown tenant"), 404
+        stored = dbmod.record_app_usage(conn, tenant, samples)
+    finally:
+        conn.close()
+    return jsonify(ok=True, stored=stored)
+
+
 @app.route("/dashboard")
 @login_required
 def dashboard():

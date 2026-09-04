@@ -1,6 +1,7 @@
 """SQLite storage + aggregation queries for NxReport."""
 import re
 import sqlite3
+from datetime import datetime
 from collections import defaultdict
 
 SCHEMA = """
@@ -27,6 +28,17 @@ CREATE TABLE IF NOT EXISTS tenants (
     reset_token TEXT UNIQUE,       -- set when a password-reset email is requested
     reset_expiry TEXT              -- ISO timestamp; token invalid after this
 );
+CREATE TABLE IF NOT EXISTS app_usage (
+    id INTEGER PRIMARY KEY,
+    tenant TEXT NOT NULL,
+    username TEXT NOT NULL,        -- AD login name from the agent
+    hostname TEXT,                 -- machine the sample came from
+    app TEXT NOT NULL,             -- friendly application name, e.g. 'Chrome'
+    site TEXT,                     -- matched leisure site only, never a raw title
+    sampled_at TEXT NOT NULL,      -- 'YYYY-MM-DD HH:MM:SS'
+    seconds INTEGER NOT NULL       -- seconds this sample represents
+);
+CREATE INDEX IF NOT EXISTS idx_usage ON app_usage(tenant, username, sampled_at);
 CREATE TABLE IF NOT EXISTS ip_user_map (
     id INTEGER PRIMARY KEY,
     tenant TEXT NOT NULL,          -- NxCloud operator name, matches dns_log.tenant
@@ -300,6 +312,60 @@ def user_for_ip_at(conn, tenant, ip, ts):
         " AND first_seen <= ? AND last_seen >= ?"
         " ORDER BY first_seen DESC LIMIT 1", (tenant, ip, ts, ts)).fetchone()
     return row["username"] if row else None
+
+
+def record_app_usage(conn, tenant, samples):
+    """Store foreground samples from a workstation agent.
+
+    Each sample says "at this moment, this app was in front, for this many
+    seconds". Time is counted by adding up samples, so it reflects what was
+    actually observed rather than an estimate. If a machine sleeps or the
+    agent misses a run, the time simply isn't counted — an undercount, which
+    is the safer direction when a person's name is attached.
+    """
+    n = 0
+    for s in samples:
+        if not isinstance(s, dict):
+            continue
+        user = (s.get("username") or "").strip()
+        app = (s.get("app") or "").strip()
+        if not user or not app:
+            continue
+        conn.execute(
+            "INSERT INTO app_usage (tenant, username, hostname, app, site,"
+            " sampled_at, seconds) VALUES (?,?,?,?,?,?,?)",
+            (tenant, user, (s.get("hostname") or "").strip() or None, app,
+             (s.get("site") or "").strip() or None,
+             s.get("sampled_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+             int(s.get("seconds") or 60)))
+        n += 1
+    conn.commit()
+    return n
+
+
+def screen_time(conn, tenant, start, end):
+    """Minutes per person, split into leisure sites and everything else."""
+    rows = conn.execute(
+        "SELECT username, app, site, SUM(seconds) secs FROM app_usage"
+        " WHERE tenant=? AND sampled_at>=? AND sampled_at<?"
+        " GROUP BY username, app, site", (tenant, start, end)).fetchall()
+    people = defaultdict(lambda: {"total": 0, "leisure": 0, "sites": defaultdict(int)})
+    for r in rows:
+        p = people[r["username"]]
+        p["total"] += r["secs"]
+        if r["site"]:
+            p["leisure"] += r["secs"]
+            p["sites"][r["site"]] += r["secs"]
+    out = []
+    for user, d in people.items():
+        top = sorted(d["sites"].items(), key=lambda kv: -kv[1])[:4]
+        out.append({
+            "user": user,
+            "minutes": round(d["total"] / 60),
+            "leisure_minutes": round(d["leisure"] / 60),
+            "sites": [{"site": s, "minutes": round(v / 60)} for s, v in top],
+        })
+    return sorted(out, key=lambda x: -x["leisure_minutes"])
 
 
 def friendly(cat):
