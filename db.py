@@ -209,6 +209,26 @@ FRIENDLY = {
 # Categories counted as "distraction" for the flagged-user metrics.
 DISTRACTION = {"Social Media", "Video & Streaming", "Games", "Shopping", "Sports"}
 
+# A DNS lookup for facebook.com can mean someone opened Facebook, or it can
+# mean a like-button loaded inside an unrelated news article. These subdomain
+# prefixes are the ones that are unambiguously machine-to-machine — tracking
+# pixels, beacons and telemetry — so counting them as leisure browsing
+# overstates what a person actually did. Excluded from per-person counts,
+# which matters because a name gets attached to those numbers.
+TRACKING_PREFIXES = (
+    "tr.", "pixel.", "pixels.", "analytics.", "beacon.", "telemetry.",
+    "metrics.", "stats.", "collect.", "log.", "logs.", "events.", "track.",
+    "tracking.", "ads.", "ad.", "adservice.", "sb.", "graph.", "connect.",
+    "mqtt.", "edge-mqtt.", "gateway.", "api.",
+)
+
+
+def is_tracking(domain):
+    """True for domains that are almost certainly background chatter rather
+    than someone visiting a site."""
+    d = (domain or "").lower()
+    return d.startswith(TRACKING_PREFIXES)
+
 
 def connect(path, check_same_thread=True):
     conn = sqlite3.connect(path, check_same_thread=check_same_thread)
@@ -356,12 +376,14 @@ def dashboard_data(conn, tenant, start, end):
         cat_share = head + [("Other", sum(n for _, n in tail))]
 
     # distraction requests per user
-    user_rows = q(f"SELECT {IDENTITY} AS person, category, COUNT(*) n {base}"
-                  f" GROUP BY person, category")
+    # Grouped by domain as well as category so tracking chatter can be
+    # excluded from the per-person counts — see is_tracking().
+    user_rows = q(f"SELECT {IDENTITY} AS person, domain, category, COUNT(*) n {base}"
+                  f" GROUP BY person, domain, category")
     per_user_all, per_user_distr = defaultdict(int), defaultdict(int)
     for r in user_rows:
         per_user_all[r["person"]] += r["n"]
-        if friendly(r["category"]) in DISTRACTION:
+        if friendly(r["category"]) in DISTRACTION and not is_tracking(r["domain"]):
             per_user_distr[r["person"]] += r["n"]
 
     # Anything that resolved to a bare IP is a device nobody was logged into —
@@ -393,7 +415,8 @@ def dashboard_data(conn, tenant, start, end):
     sites = defaultdict(list)
     for r in q(f"SELECT {IDENTITY} AS person, domain, category, COUNT(*) n {base}"
                f" GROUP BY person, domain ORDER BY n DESC"):
-        if friendly(r["category"]) in DISTRACTION and len(sites[r["person"]]) < 4:
+        if (friendly(r["category"]) in DISTRACTION and not is_tracking(r["domain"])
+                and len(sites[r["person"]]) < 4):
             sites[r["person"]].append({"domain": r["domain"], "requests": r["n"]})
 
     per_user = [{"user": u, "total": per_user_all[u],
@@ -430,7 +453,7 @@ def dashboard_data(conn, tenant, start, end):
     distr_total = sum(per_user_distr.values())
     return {
         "tenant": tenant, "start": start, "end": end,
-        "kpis": {"total": total, "users": users or 0, "blocked": blocked,
+        "kpis": {"total": total, "users": len(named), "blocked": blocked,
                  "distraction_pct": round(100 * distr_total / total, 1) if total else 0},
         "category_share": [{"category": c, "requests": n} for c, n in cat_share],
         "per_user": per_user, "flagged_user": flagged,

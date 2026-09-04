@@ -207,6 +207,7 @@
       <div>
         <h2>Social media &amp; leisure browsing, by person</h2>
         <p class="desc">Requests to social, streaming, shopping and games sites during the period. <span class="no-print">Hover a bar to see the sites involved.</span></p>
+        <p class="desc">These are DNS lookups, not time spent. A single page can trigger several, and embedded content can trigger one without anyone visiting the site. Useful for spotting patterns over time, not as a measure of minutes.</p>
         <p class="desc" id="unattribNote" style="display:none"></p>
       </div>
       <div class="card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
@@ -298,11 +299,17 @@
     const k = D.kpis, host = document.getElementById('kpis');
     host.innerHTML = '';
     const items = [
-      ['Web requests', fmt(k.total), 'across ' + k.users + ' staff'],
+      ['Web requests', fmt(k.total), 'across ' + k.users + ' signed-in users'],
       ['Social & leisure share', k.distraction_pct + '%', 'of all browsing'],
-      ['Blocked attempts', fmt(k.blocked), 'harmful or off-policy sites'],
-      ['Needs a look', D.flagged_user ? cap(D.flagged_user) : '—',
-        'highest social-media use', true]];
+      // Says 'flagged', not 'blocked'. NCS is monitor-only: nothing was
+      // stopped, these matched malware/phishing lists. Claiming otherwise
+      // would be contradicted the moment the client asks what was blocked.
+      ['Flagged requests', fmt(k.blocked), 'matched malware/phishing lists'],
+      // Deliberately descriptive rather than a verdict - the underlying
+      // number is DNS requests, which can't distinguish a deliberate visit
+      // from an embedded widget.
+      ['Most leisure activity', D.flagged_user ? cap(D.flagged_user) : '—',
+        'by request count', true]];
     for (const [l, v, n, flag] of items) {
       const d = document.createElement('div'); d.className = 'tile';
       d.innerHTML = '<div class="lbl">' + l + '</div><div class="val">' + v +
@@ -319,14 +326,15 @@
     let level, icon, title, sub;
     if (k.blocked > 0) {
       level = 'critical'; icon = '&#9888;';
-      title = 'Blocked attempts detected';
+      title = 'Requests flagged for review';
       sub = fmt(k.blocked) + ' request' + (k.blocked === 1 ? '' : 's') +
-        ' hit malware/phishing or off-policy sites this period.';
+        ' matched malware or phishing lists this period. Filtering is in ' +
+        'monitor-only mode, so these were logged, not blocked.';
     } else if (k.distraction_pct >= 25) {
       level = 'amber'; icon = '&#9888;';
       title = 'Social & leisure browsing is elevated';
       sub = k.distraction_pct + '% of all requests this period' +
-        (D.flagged_user ? ', led by ' + cap(D.flagged_user) : '') + '.';
+        (D.flagged_user ? ', most from ' + cap(D.flagged_user) : '') + '.';
     } else {
       level = 'ok'; icon = '&#10003;';
       title = 'All quiet';
