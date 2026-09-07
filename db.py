@@ -327,6 +327,40 @@ def connect(path, check_same_thread=True):
     return conn
 
 
+def set_device_mapping(conn, tenant, ip, label):
+    """Permanently map a fixed device IP to a person/label - for phones,
+    tablets and anything that can't create an AD session or run the agent,
+    so the mapper never names them. Requires the device to have a reserved
+    (static) IP, or the mapping drifts when DHCP reassigns.
+
+    Stored with first_seen far in the past and last_seen far in the future,
+    so it always covers any dns_log timestamp and the existing IDENTITY join
+    picks it up with no other change. A label like 'Lorraine (phone)' keeps
+    it distinct from her PC login in reports."""
+    conn.execute(
+        "DELETE FROM ip_user_map WHERE tenant=? AND ip=? AND first_seen='2000-01-01 00:00:00'",
+        (tenant, ip))
+    conn.execute(
+        "INSERT INTO ip_user_map (tenant, ip, username, first_seen, last_seen)"
+        " VALUES (?,?,?, '2000-01-01 00:00:00', '2099-12-31 23:59:59')",
+        (tenant, ip, label))
+    conn.commit()
+
+
+def list_device_mappings(conn, tenant):
+    """The permanent device mappings for a tenant (the phone/tablet ones)."""
+    return conn.execute(
+        "SELECT ip, username FROM ip_user_map WHERE tenant=?"
+        " AND first_seen='2000-01-01 00:00:00' ORDER BY ip", (tenant,)).fetchall()
+
+
+def remove_device_mapping(conn, tenant, ip):
+    conn.execute(
+        "DELETE FROM ip_user_map WHERE tenant=? AND ip=? AND first_seen='2000-01-01 00:00:00'",
+        (tenant, ip))
+    conn.commit()
+
+
 def record_ip_users(conn, tenant, pairs, seen_at=None, gap_seconds=600):
     """Record observed (ip, username) pairs from a site agent.
 

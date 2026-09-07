@@ -338,6 +338,37 @@ def agent_script(name, script):
     return app.response_class(body, mimetype="text/plain")
 
 
+@app.route("/admin/tenants/<name>/devices", methods=["GET", "POST"])
+@admin_required
+def admin_devices(name):
+    """Manage permanent device->person mappings for phones/tablets - devices
+    that can't create an AD session so the mapper never names them. Needs the
+    device on a reserved (static) IP. Turns unattributed 'NCS' phone traffic
+    into named activity in the reports."""
+    conn = get_conn()
+    t = conn.execute("SELECT * FROM tenants WHERE name=?", (name,)).fetchone()
+    if not t:
+        abort(404)
+    error = None
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            ip = request.form.get("ip", "").strip()
+            label = request.form.get("label", "").strip()
+            import re as _re
+            if not _re.match(r"^\d{1,3}(\.\d{1,3}){3}$", ip):
+                error = "Enter a valid IPv4 address (the phone's reserved IP)."
+            elif not label:
+                error = "Enter a name for the device, e.g. 'Lorraine (phone)'."
+            else:
+                dbmod.set_device_mapping(conn, name, ip, label)
+        elif action == "remove":
+            dbmod.remove_device_mapping(conn, name, request.form.get("ip", "").strip())
+    devices = dbmod.list_device_mappings(conn, name)
+    return render_template("admin_devices.html", brand=BRAND, t=t,
+                           devices=devices, error=error)
+
+
 @app.route("/admin/tenants/<name>/deploy")
 @admin_required
 def admin_deploy_tenant(name):
